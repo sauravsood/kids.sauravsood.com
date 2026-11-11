@@ -92,8 +92,9 @@ function formatTime(total) {
 function show(id) {
   for (const s of screens) s.hidden = s.id !== id;
   $("topbar").hidden = !(state.me && state.me.kidName);
-  $("tab-animals").classList.toggle("active", id === "home" || id === "category" || id === "draw");
-  $("tab-history").classList.toggle("active", id === "history");
+  const viewing = id === "draw" && draw.classList.contains("readonly");
+  $("tab-animals").classList.toggle("active", id === "home" || id === "category" || (id === "draw" && !viewing));
+  $("tab-history").classList.toggle("active", id === "history" || viewing);
 }
 
 // ---------- Sign in ----------
@@ -225,7 +226,7 @@ setInterval(() => {
   if (!state.me || !state.me.kidName || document.visibilityState !== "visible") return;
   if (Date.now() - state.lastActivity > IDLE_MS) return;
   state.pendingSeconds += 1;
-  if (!draw.hidden && state.animal) state.drawingSeconds += 1;
+  if (!draw.hidden && state.animal && !state.readOnly) state.drawingSeconds += 1;
   renderTopbar();
 }, 1000);
 
@@ -289,8 +290,9 @@ async function route() {
   const category = group && CATEGORIES.find((c) => c.id === group[1]);
   if (category) return showCategory(category);
 
-  const existing = hash.match(/^d\/(\d+)$/);
-  if (existing) return openDrawing(Number(existing[1]));
+  // #d/<id> views a saved drawing; #e/<id> keeps editing the drawing in progress.
+  const existing = hash.match(/^([de])\/(\d+)$/);
+  if (existing) return openDrawing(Number(existing[2]), existing[1] === "d");
 
   const animal = ANIMALS.find((a) => a.id === hash);
   if (animal) return startDrawing(animal, null, [], 0);
@@ -320,14 +322,60 @@ async function showHistory() {
       <ul class="grid">
         ${items.map((d) => {
           const animal = ANIMALS.find((a) => a.id === d.animal);
-          const time = new Date(d.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+          const when = stamp(d.createdAt);
           const img = d.thumb ? `<img src="${d.thumb}" alt="">` : `<img alt="">`;
-          return `<li><a class="past" style="--tint:${animal?.tint || "#eee"}" href="#d/${d.id}"
-                    aria-label="${animal?.name || d.animal}, ${time}">${img}<span>${time}</span></a></li>`;
+          return `<li class="past-item" data-id="${d.id}">
+                    <a class="past" style="--tint:${animal?.tint || "#eee"}" href="#d/${d.id}"
+                      aria-label="${animal?.name || d.animal}, ${when}">${img}<span>${when}</span></a>
+                    <button class="icon-btn trash" aria-label="Delete drawing"><svg viewBox="0 0 24 24"><path d="M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 21 H17 L18 7 M10 11 V17 M14 11 V17"/></svg></button>
+                  </li>`;
         }).join("")}
       </ul>
     </section>`).join("");
 }
+
+// "11 Nov · 3:28 PM"
+function stamp(ms) {
+  const d = new Date(ms);
+  const date = d.toLocaleDateString([], { day: "numeric", month: "short",
+    year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+  return `${date} · ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+}
+
+// Delete needs two taps: the first turns the button red, the second deletes.
+function twoTap(button, action) {
+  if (!button.classList.contains("armed")) {
+    document.querySelectorAll(".armed").forEach((b) => b !== button && b.classList.remove("armed"));
+    button.classList.add("armed");
+    clearTimeout(button._disarm);
+    button._disarm = setTimeout(() => button.classList.remove("armed"), 2500);
+    return;
+  }
+  clearTimeout(button._disarm);
+  button.classList.remove("armed");
+  action();
+}
+
+async function deleteDrawing(id) {
+  const res = await api(`/api/drawings/${id}`, { method: "DELETE" });
+  state.me.stats = res.stats;
+  renderTopbar();
+}
+
+$("history-list").addEventListener("click", (e) => {
+  const button = e.target.closest(".trash");
+  if (!button) return;
+  const item = button.closest(".past-item");
+  twoTap(button, async () => {
+    try {
+      await deleteDrawing(Number(item.dataset.id));
+      const day = item.closest(".day");
+      item.remove();
+      if (!day.querySelector(".past-item")) day.remove();
+      $("history-empty").hidden = !!$("history-list").querySelector(".past-item");
+    } catch (err) { handleError(err); }
+  });
+});
 
 function dayLabel(date) {
   const start = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
@@ -338,19 +386,22 @@ function dayLabel(date) {
     year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
 }
 
-async function openDrawing(id) {
+async function openDrawing(id, readOnly) {
   try {
     const { drawing } = await api(`/api/drawings/${id}`);
     const animal = ANIMALS.find((a) => a.id === drawing.animal);
     if (!animal) throw new Error("Unknown animal");
-    startDrawing(animal, drawing.id, drawing.strokes, drawing.seconds);
+    startDrawing(animal, drawing.id, drawing.strokes, drawing.seconds, readOnly);
+    $("view-date").textContent = stamp(drawing.createdAt);
   } catch (err) {
     handleError(err);
     location.hash = "history";
   }
 }
 
-function startDrawing(animal, id, strokes, seconds) {
+function startDrawing(animal, id, strokes, seconds, readOnly = false) {
+  state.readOnly = readOnly;
+  draw.classList.toggle("readonly", readOnly);
   state.animal = animal;
   state.drawingId = id;
   state.strokes = strokes;
@@ -376,6 +427,16 @@ function layout() {
   if (canvas.width !== px) canvas.width = canvas.height = committed.width = committed.height = px;
   redrawAll();
 }
+
+$("view-delete").addEventListener("click", (e) => {
+  twoTap(e.currentTarget, async () => {
+    try {
+      await deleteDrawing(state.drawingId);
+      state.animal = null;
+      location.hash = "history";
+    } catch (err) { handleError(err); }
+  });
+});
 
 // ---------- Saving drawings ----------
 
@@ -415,7 +476,7 @@ async function saveNow(keepalive = false) {
       // Still on this new drawing: give it its own address so a reload reopens it.
       if (!id && state.animal === animal && state.drawingId === null && location.hash === `#${animal.id}`) {
         state.drawingId = res.drawing.id;
-        history.replaceState(null, "", `#d/${res.drawing.id}`);
+        history.replaceState(null, "", `#e/${res.drawing.id}`);
       }
     } catch (err) {
       if (state.animal === animal) state.dirty = true;
@@ -625,6 +686,7 @@ function startStroke(e) {
 }
 
 canvas.addEventListener("pointerdown", (e) => {
+  if (state.readOnly) return;
   const isPen = e.pointerType === "pen";
   if (isPen) state.penSeenAt = performance.now();
   if (e.pointerType === "touch" && penRecently()) return;
