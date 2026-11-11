@@ -16,19 +16,67 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main id="home" class="screen">
-    <header class="brand">
-      <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M14 50 L40 14 L50 22 L24 58 L12 60 Z" fill="#ff9f1c"/><path d="M40 14 L44 8 L54 16 L50 22 Z" fill="#ff4d6d"/><path d="M14 50 L24 58 L12 60 Z" fill="#3a3f4b"/></svg>
+  <!-- Always-visible bar once signed in: who's drawing, how many drawings, time spent, tabs. -->
+  <header id="topbar" class="topbar" hidden>
+    <button id="who" class="who" aria-label="Profile">
+      <span id="who-initial" class="initial"></span>
+      <span id="who-name" class="who-name"></span>
+    </button>
+    <div class="stats" aria-label="Stats">
+      <span class="stat" title="Drawings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20 L15 5 L19 8 L8 23 Z" transform="translate(0 -2)"/></svg>
+        <b id="stat-drawings">0</b>
+      </span>
+      <span class="stat" title="Time spent">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9 V13 L15 15 M9 2 H15"/></svg>
+        <b id="stat-time">0m</b>
+      </span>
+    </div>
+    <nav class="tabs" aria-label="Sections">
+      <a id="tab-animals" class="tab" href="#">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>
+        <span>Animals</span>
+      </a>
+      <a id="tab-history" class="tab" href="#history">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12 A8.5 8.5 0 1 0 6 6 M3 3 V7 H7 M12 7.5 V12 L15 14"/></svg>
+        <span>History</span>
+      </a>
+    </nav>
+  </header>
+
+  <main id="signin" class="screen center" hidden>
+    <div class="welcome">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><path d="M14 50 L40 14 L50 22 L24 58 L12 60 Z" fill="#ff9f1c"/><path d="M40 14 L44 8 L54 16 L50 22 Z" fill="#ff4d6d"/><path d="M14 50 L24 58 L12 60 Z" fill="#3a3f4b"/></svg>
       <h1>Trace</h1>
-    </header>
+      <div id="google-btn" class="google-btn"></div>
+      <button id="dev-login" class="pill" hidden>Dev sign-in</button>
+      <p id="signin-note" class="note">Grown-ups: sign in to save drawings.</p>
+    </div>
+  </main>
+
+  <main id="hello" class="screen center" hidden>
+    <form id="name-form" class="welcome">
+      <h1>Hi! What’s your name?</h1>
+      <input id="name-input" class="name-input" maxlength="30" autocomplete="off" autocapitalize="words" spellcheck="false" required aria-label="Name">
+      <button class="go" aria-label="Start">
+        <svg viewBox="0 0 24 24"><path d="M5 12 H19 M13 6 L19 12 L13 18"/></svg>
+      </button>
+    </form>
+  </main>
+
+  <main id="home" class="screen" hidden>
     <ul id="animals" class="grid" aria-label="Animals"></ul>
   </main>
 
-  <section id="draw" class="screen" hidden>
-    <button id="back" class="icon-btn back" aria-label="Back to animals">
-      <svg viewBox="0 0 24 24"><path d="M4 11 L12 4 L20 11 M6 9.5 V20 H18 V9.5"/></svg>
-    </button>
+  <main id="history" class="screen" hidden>
+    <div id="history-list"></div>
+    <div id="history-empty" class="empty" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12 A8.5 8.5 0 1 0 6 6 M3 3 V7 H7 M12 7.5 V12 L15 14"/></svg>
+      <a class="pill" href="#">Draw something!</a>
+    </div>
+  </main>
 
+  <section id="draw" class="screen" hidden>
     <div id="stage-wrap" class="stage-wrap">
       <div id="stage" class="stage">
         <div id="guide" class="guide-layer"></div>
@@ -54,8 +102,22 @@
         </button>
       </div>
     </div>
-    <div id="confetti" class="confetti" aria-hidden="true"></div>
   </section>
+
+  <dialog id="profile" class="sheet">
+    <form id="profile-form" method="dialog">
+      <input id="profile-name" class="name-input" maxlength="30" autocomplete="off" autocapitalize="words" spellcheck="false" required aria-label="Name">
+      <p id="profile-today" class="note"></p>
+      <p id="profile-email" class="note"></p>
+      <div class="sheet-row">
+        <button id="signout" type="button" class="pill ghost">Sign out</button>
+        <button type="submit" class="pill">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+  <div id="confetti" class="confetti" aria-hidden="true"></div>
 
   <script type="module" src="app.js"></script>
 </body>

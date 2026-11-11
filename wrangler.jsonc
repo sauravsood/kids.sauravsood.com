@@ -1,9 +1,24 @@
 {
-  // Static site served by Cloudflare Workers (no build step).
+  // Trace: static app in public/, plus a small API Worker for sign-in,
+  // saved drawings and stats. Only /api/* runs the Worker; everything else
+  // is served straight from public/.
   "name": "kids-sauravsood-com",
+  "main": "src/worker.js",
   "compatibility_date": "2026-11-01",
   "assets": {
     "directory": "./public",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kids",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ],
+  "vars": {
+    // OAuth "Web application" client from Google Cloud Console. Not a secret.
+    "GOOGLE_CLIENT_ID": ""
   }
 }

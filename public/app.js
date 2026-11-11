@@ -10,9 +10,12 @@ const COLORS = [
   "#3ec5ff", "#2f6bff", "#9b5de5", "#ff70a6", "#8d5a3b", "#3a3f4b",
 ];
 const SIZES = [14, 28, 56];
+const IDLE_MS = 3 * 60_000;      // stop counting time after 3 minutes without a touch
+const USAGE_FLUSH_MS = 30_000;   // send time spent to the server this often
+const SAVE_DELAY_MS = 1200;      // save a drawing this long after the last change
 
 const $ = (id) => document.getElementById(id);
-const home = $("home");
+const screens = ["signin", "hello", "home", "history", "draw"].map($);
 const draw = $("draw");
 const stageWrap = $("stage-wrap");
 const stage = $("stage");
@@ -23,49 +26,430 @@ const committed = document.createElement("canvas");
 const cctx = committed.getContext("2d");
 
 const state = {
+  me: null,             // { kidName, email, stats }
+  config: null,
   animal: null,
+  drawingId: null,      // server id once the drawing has been saved
+  drawingSeconds: 0,
+  dirty: false,
   color: COLORS[0],
   size: SIZES[1],
   eraser: false,
   strokes: [],
-  cleared: null, // strokes kept after "clear", so undo can bring them back
+  cleared: null,        // strokes kept after "clear", so undo can bring them back
   current: null,
   activePointer: null,
   penSeenAt: 0,
+  lastActivity: Date.now(),
+  pendingSeconds: 0,
 };
 
-// ---------- Storage (best effort: private browsing may block it) ----------
+// ---------- Small helpers ----------
 
 const store = {
   get(key, fallback) {
     try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
   },
   set(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private browsing */ }
   },
 };
 
-// ---------- Home ----------
+class AuthError extends Error {}
+
+async function api(path, { method = "GET", data, keepalive = false } = {}) {
+  const res = await fetch(path, {
+    method,
+    keepalive,
+    credentials: "same-origin",
+    headers: data ? { "Content-Type": "application/json" } : undefined,
+    body: data ? JSON.stringify(data) : undefined,
+  });
+  if (res.status === 401) throw new AuthError("Signed out");
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
+  return body;
+}
+
+let toastTimer = 0;
+function toast(text) {
+  const t = $("toast");
+  t.textContent = text;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 3000);
+}
+
+function formatTime(total) {
+  const s = Math.max(0, Math.floor(total));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h) return `${h}h ${String(m).padStart(2, "0")}m`;
+  if (m) return `${m}m`;
+  return `${s}s`;
+}
+
+function show(id) {
+  for (const s of screens) s.hidden = s.id !== id;
+  $("topbar").hidden = !(state.me && state.me.kidName);
+  $("tab-animals").classList.toggle("active", id === "home" || id === "draw");
+  $("tab-history").classList.toggle("active", id === "history");
+}
+
+// ---------- Sign in ----------
+
+async function boot() {
+  try {
+    state.config = await api("/api/config");
+  } catch {
+    state.config = { googleClientId: null, devLogin: false };
+  }
+  try {
+    state.me = await api("/api/me");
+  } catch (err) {
+    state.me = null;
+  }
+  route();
+}
+
+function showSignin() {
+  state.me = null;
+  show("signin");
+  const { googleClientId, devLogin } = state.config || {};
+  $("dev-login").hidden = !devLogin;
+  if (!googleClientId) {
+    if (!devLogin) $("signin-note").textContent = "Sign-in isn’t set up yet.";
+    return;
+  }
+  loadGoogle().then(() => {
+    google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: ({ credential }) => finishSignin(api("/api/auth/google", { method: "POST", data: { credential } })),
+      auto_select: true,
+    });
+    google.accounts.id.renderButton($("google-btn"), { theme: "filled_blue", size: "large", shape: "pill", text: "signin_with" });
+  }).catch(() => { $("signin-note").textContent = "Couldn’t reach Google. Check the internet and reload."; });
+}
+
+let googlePromise = null;
+function loadGoogle() {
+  googlePromise ??= new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.async = true;
+    s.onload = resolve;
+    s.onerror = () => { googlePromise = null; reject(new Error("Google script failed")); };
+    document.head.appendChild(s);
+  });
+  return googlePromise;
+}
+
+async function finishSignin(request) {
+  try {
+    state.me = await request;
+    route();
+  } catch (err) {
+    toast("Sign-in didn’t work. Try again.");
+  }
+}
+
+$("dev-login").addEventListener("click", () => {
+  finishSignin(api("/api/auth/dev", { method: "POST", data: { email: "dev@example.com" } }));
+});
+
+$("name-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("name-input").value.trim();
+  if (!name) return;
+  try {
+    state.me = await api("/api/me", { method: "PUT", data: { kidName: name } });
+    location.hash = "";
+    route();
+  } catch (err) { handleError(err); }
+});
+
+// ---------- Top bar and profile ----------
+
+function renderTopbar() {
+  if (!state.me) return;
+  const name = state.me.kidName || "";
+  $("who-initial").textContent = name.slice(0, 1).toUpperCase();
+  $("who-name").textContent = name;
+  $("stat-drawings").textContent = state.me.stats.drawings;
+  $("stat-time").textContent = formatTime(state.me.stats.seconds + state.pendingSeconds);
+}
+
+$("who").addEventListener("click", () => {
+  $("profile-name").value = state.me.kidName || "";
+  $("profile-today").textContent = `Today: ${formatTime(state.me.stats.todaySeconds + state.pendingSeconds)}`;
+  $("profile-email").textContent = state.me.email ? `Signed in as ${state.me.email}` : "";
+  $("profile").showModal();
+});
+
+$("profile-form").addEventListener("submit", async () => {
+  const name = $("profile-name").value.trim();
+  if (!name || name === state.me.kidName) return;
+  try {
+    state.me = await api("/api/me", { method: "PUT", data: { kidName: name } });
+    renderTopbar();
+  } catch (err) { handleError(err); }
+});
+
+$("signout").addEventListener("click", async () => {
+  $("profile").close();
+  await saveNow();
+  await flushUsage();
+  try { await api("/api/auth/logout", { method: "POST" }); } catch { /* already out */ }
+  try { google.accounts.id.disableAutoSelect(); } catch { /* not loaded */ }
+  location.hash = "";
+  showSignin();
+});
+
+function handleError(err) {
+  if (err instanceof AuthError) { showSignin(); return; }
+  console.error(err);
+  toast("Couldn’t save. Check the internet.");
+}
+
+// ---------- Time spent ----------
+
+for (const type of ["pointerdown", "keydown"]) {
+  window.addEventListener(type, () => { state.lastActivity = Date.now(); }, { capture: true, passive: true });
+}
+
+setInterval(() => {
+  if (!state.me || !state.me.kidName || document.visibilityState !== "visible") return;
+  if (Date.now() - state.lastActivity > IDLE_MS) return;
+  state.pendingSeconds += 1;
+  if (!draw.hidden && state.animal) state.drawingSeconds += 1;
+  renderTopbar();
+}, 1000);
+
+setInterval(() => { flushUsage(); }, USAGE_FLUSH_MS);
+
+async function flushUsage(keepalive = false) {
+  const seconds = Math.min(120, state.pendingSeconds);
+  if (!seconds || !state.me) return;
+  state.pendingSeconds -= seconds;
+  try {
+    const stats = await api("/api/usage", { method: "POST", data: { seconds }, keepalive });
+    state.me.stats = stats;
+  } catch (err) {
+    state.pendingSeconds += seconds; // try again next time
+    if (err instanceof AuthError) showSignin();
+  }
+  renderTopbar();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    flushUsage(true);
+    saveNow(true);
+  }
+});
+
+// ---------- Screens ----------
 
 function buildHome() {
-  const list = $("animals");
-  list.innerHTML = ANIMALS.map((a) => `
-    <li><button class="card" style="--tint:${a.tint}" data-id="${a.id}" aria-label="${a.name}">
+  $("animals").innerHTML = ANIMALS.map((a) => `
+    <li><a class="card" style="--tint:${a.tint}" href="#${a.id}" aria-label="${a.name}">
       ${animalSvg(a, "thumb")}
-    </button></li>`).join("");
-  list.addEventListener("click", (e) => {
-    const card = e.target.closest(".card");
-    if (card) location.hash = card.dataset.id;
-  });
+    </a></li>`).join("");
+}
+
+async function route() {
+  await saveNow();
+  state.animal = null;
+
+  if (!state.me) return showSignin();
+  if (!state.me.kidName) {
+    show("hello");
+    setTimeout(() => $("name-input").focus(), 50);
+    return;
+  }
+  renderTopbar();
+
+  const hash = location.hash.slice(1);
+  if (hash === "history") return showHistory();
+
+  const existing = hash.match(/^d\/(\d+)$/);
+  if (existing) return openDrawing(Number(existing[1]));
+
+  const animal = ANIMALS.find((a) => a.id === hash);
+  if (animal) return startDrawing(animal, null, [], 0);
+
+  show("home");
+}
+
+async function showHistory() {
+  show("history");
+  const list = $("history-list");
+  list.innerHTML = "";
+  let drawings = [];
+  try {
+    ({ drawings } = await api("/api/drawings"));
+  } catch (err) { handleError(err); return; }
+  $("history-empty").hidden = drawings.length > 0;
+
+  const byDay = new Map();
+  for (const d of drawings) {
+    const label = dayLabel(new Date(d.createdAt));
+    if (!byDay.has(label)) byDay.set(label, []);
+    byDay.get(label).push(d);
+  }
+  list.innerHTML = [...byDay].map(([label, items]) => `
+    <section class="day">
+      <h2>${label}</h2>
+      <ul class="grid">
+        ${items.map((d) => {
+          const animal = ANIMALS.find((a) => a.id === d.animal);
+          const time = new Date(d.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+          const img = d.thumb ? `<img src="${d.thumb}" alt="">` : `<img alt="">`;
+          return `<li><a class="past" style="--tint:${animal?.tint || "#eee"}" href="#d/${d.id}"
+                    aria-label="${animal?.name || d.animal}, ${time}">${img}<span>${time}</span></a></li>`;
+        }).join("")}
+      </ul>
+    </section>`).join("");
+}
+
+function dayLabel(date) {
+  const start = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((start(new Date()) - start(date)) / 86400000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return date.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short",
+    year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+}
+
+async function openDrawing(id) {
+  try {
+    const { drawing } = await api(`/api/drawings/${id}`);
+    const animal = ANIMALS.find((a) => a.id === drawing.animal);
+    if (!animal) throw new Error("Unknown animal");
+    startDrawing(animal, drawing.id, drawing.strokes, drawing.seconds);
+  } catch (err) {
+    handleError(err);
+    location.hash = "history";
+  }
+}
+
+function startDrawing(animal, id, strokes, seconds) {
+  state.animal = animal;
+  state.drawingId = id;
+  state.strokes = strokes;
+  state.drawingSeconds = seconds;
+  state.cleared = null;
+  state.current = null;
+  state.dirty = false;
+  guide.innerHTML = animalSvg(animal, "guide");
+  stage.setAttribute("aria-label", `Trace the ${animal.name.toLowerCase()}`);
+  show("draw");
+  layout();
+}
+
+// Keep the paper square and as big as the space allows.
+function layout() {
+  if (draw.hidden) return;
+  const { width, height } = stageWrap.getBoundingClientRect();
+  const side = Math.floor(Math.min(width, height));
+  if (side <= 0) return;
+  stage.style.width = stage.style.height = `${side}px`;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const px = Math.round(side * dpr);
+  if (canvas.width !== px) canvas.width = canvas.height = committed.width = committed.height = px;
+  redrawAll();
+}
+
+// ---------- Saving drawings ----------
+
+let saveTimer = 0;
+let saving = null;
+
+function scheduleSave() {
+  state.dirty = true;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => saveNow(), SAVE_DELAY_MS);
+}
+
+async function saveNow(keepalive = false) {
+  clearTimeout(saveTimer);
+  if (saving) await saving;
+  if (!state.dirty || !state.animal || !state.me) return;
+  state.dirty = false;
+  const animal = state.animal;
+  const strokes = state.strokes;
+  const id = state.drawingId;
+  saving = (async () => {
+    try {
+      if (!strokes.length) {
+        // Cleared drawings are removed rather than kept as blank pages.
+        if (id) {
+          const res = await api(`/api/drawings/${id}`, { method: "DELETE", keepalive });
+          if (state.drawingId === id) state.drawingId = null;
+          state.me.stats = res.stats;
+        }
+        return;
+      }
+      const data = { animal: animal.id, strokes, seconds: state.drawingSeconds, thumb: await thumbnail(animal, strokes) };
+      const res = id
+        ? await api(`/api/drawings/${id}`, { method: "PUT", data, keepalive })
+        : await api("/api/drawings", { method: "POST", data, keepalive });
+      state.me.stats = res.stats;
+      // Still on this new drawing: give it its own address so a reload reopens it.
+      if (!id && state.animal === animal && state.drawingId === null && location.hash === `#${animal.id}`) {
+        state.drawingId = res.drawing.id;
+        history.replaceState(null, "", `#d/${res.drawing.id}`);
+      }
+    } catch (err) {
+      if (state.animal === animal) state.dirty = true;
+      handleError(err);
+    } finally {
+      saving = null;
+      renderTopbar();
+    }
+  })();
+  return saving;
+}
+
+const guideImages = new Map();
+function guideImage(animal) {
+  if (!guideImages.has(animal.id)) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="256" height="256">
+      <style>path,circle,ellipse{fill:#fff;stroke:#c5cbd6;stroke-width:14;stroke-linecap:round;stroke-linejoin:round}.dot{fill:#c5cbd6;stroke:none}</style>
+      ${animal.shapes.join("")}</svg>`;
+    guideImages.set(animal.id, new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    }));
+  }
+  return guideImages.get(animal.id);
+}
+
+async function thumbnail(animal, strokes) {
+  const size = 256;
+  const ink = document.createElement("canvas");
+  ink.width = ink.height = size;
+  const ictx = ink.getContext("2d");
+  for (const s of strokes) paintStroke(ictx, s);
+  const out = document.createElement("canvas");
+  out.width = out.height = size;
+  const octx = out.getContext("2d");
+  octx.fillStyle = "#fff";
+  octx.fillRect(0, 0, size, size);
+  const img = await guideImage(animal);
+  if (img) octx.drawImage(img, 0, 0, size, size);
+  octx.drawImage(ink, 0, 0);
+  return out.toDataURL("image/jpeg", 0.82);
 }
 
 // ---------- Tools ----------
 
 function buildTools() {
-  const colors = $("colors");
-  colors.innerHTML = COLORS.map((c) =>
+  $("colors").innerHTML = COLORS.map((c) =>
     `<button class="swatch" role="radio" style="--c:${c}" data-color="${c}" aria-label="Colour ${c}"></button>`).join("");
-  colors.addEventListener("click", (e) => {
+  $("colors").addEventListener("click", (e) => {
     const b = e.target.closest(".swatch");
     if (!b) return;
     state.color = b.dataset.color;
@@ -73,11 +457,10 @@ function buildTools() {
     syncTools();
   });
 
-  const sizes = $("sizes");
-  sizes.innerHTML = SIZES.map((s, i) =>
+  $("sizes").innerHTML = SIZES.map((s, i) =>
     `<button class="size" role="radio" data-size="${s}" aria-label="${["Thin", "Medium", "Thick"][i]}">
       <span style="width:${10 + i * 11}px;height:${10 + i * 11}px"></span></button>`).join("");
-  sizes.addEventListener("click", (e) => {
+  $("sizes").addEventListener("click", (e) => {
     const b = e.target.closest(".size");
     if (!b) return;
     state.size = Number(b.dataset.size);
@@ -86,8 +469,7 @@ function buildTools() {
 
   $("eraser").addEventListener("click", () => { state.eraser = !state.eraser; syncTools(); });
   $("undo").addEventListener("click", undo);
-  $("star").addEventListener("click", celebrate);
-  $("back").addEventListener("click", () => { location.hash = ""; });
+  $("star").addEventListener("click", () => { celebrate(); saveNow(); });
 
   // Clear needs two taps so a stray tap doesn't wipe a drawing.
   const clear = $("clear");
@@ -103,7 +485,8 @@ function buildTools() {
     if (!state.strokes.length) return;
     state.cleared = state.strokes;
     state.strokes = [];
-    afterChange();
+    redrawAll();
+    scheduleSave();
   });
 }
 
@@ -117,40 +500,12 @@ function syncTools() {
   store.set("trace:tools", { color: state.color, size: state.size });
 }
 
-// ---------- Screens ----------
-
-function route() {
-  const animal = ANIMALS.find((a) => a.id === location.hash.slice(1));
-  if (!animal) {
-    state.animal = null;
-    draw.hidden = true;
-    home.hidden = false;
-    return;
-  }
-  state.animal = animal;
-  state.strokes = store.get(`trace:${animal.id}`, []);
-  state.cleared = null;
-  state.current = null;
-  guide.innerHTML = animalSvg(animal, "guide");
-  stage.setAttribute("aria-label", `Trace the ${animal.name.toLowerCase()}`);
-  home.hidden = true;
-  draw.hidden = false;
-  layout();
-}
-
-// Keep the paper square and as big as the space allows.
-function layout() {
-  if (draw.hidden) return;
-  const { width, height } = stageWrap.getBoundingClientRect();
-  const side = Math.floor(Math.min(width, height));
-  if (side <= 0) return;
-  stage.style.width = stage.style.height = `${side}px`;
-  const dpr = Math.min(window.devicePixelRatio || 1, 3);
-  const px = Math.round(side * dpr);
-  if (canvas.width !== px) {
-    canvas.width = canvas.height = committed.width = committed.height = px;
-  }
+function undo() {
+  if (state.strokes.length) state.strokes = state.strokes.slice(0, -1);
+  else if (state.cleared) { state.strokes = state.cleared; state.cleared = null; }
+  else return;
   redrawAll();
+  scheduleSave();
 }
 
 // ---------- Rendering ----------
@@ -281,11 +636,11 @@ function endStroke(e) {
   if (!stroke) return;
   if (e.type === "pointercancel" && !stroke.pen) { frame(); return; }
   stroke.points = stroke.points.map(([x, y, p]) => [Math.round(x * 10) / 10, Math.round(y * 10) / 10, Math.round(p * 100) / 100]);
-  state.strokes.push(stroke);
+  state.strokes = [...state.strokes, stroke];
   state.cleared = null;
   paintStroke(cctx, stroke);
   frame();
-  save();
+  scheduleSave();
 }
 canvas.addEventListener("pointerup", endStroke);
 canvas.addEventListener("pointercancel", endStroke);
@@ -300,23 +655,7 @@ for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
 }
 document.addEventListener("contextmenu", (e) => { if (!draw.hidden) e.preventDefault(); });
 
-// ---------- Undo, save, celebrate ----------
-
-function undo() {
-  if (state.strokes.length) state.strokes.pop();
-  else if (state.cleared) { state.strokes = state.cleared; state.cleared = null; }
-  else return;
-  afterChange();
-}
-
-function afterChange() {
-  redrawAll();
-  save();
-}
-
-function save() {
-  if (state.animal) store.set(`trace:${state.animal.id}`, state.strokes);
-}
+// ---------- Celebrate ----------
 
 function celebrate() {
   const box = $("confetti");
@@ -341,13 +680,13 @@ function celebrate() {
 
 // ---------- Start ----------
 
-const saved = store.get("trace:tools", null);
-if (saved && COLORS.includes(saved.color)) state.color = saved.color;
-if (saved && SIZES.includes(saved.size)) state.size = saved.size;
+const savedTools = store.get("trace:tools", null);
+if (savedTools && COLORS.includes(savedTools.color)) state.color = savedTools.color;
+if (savedTools && SIZES.includes(savedTools.size)) state.size = savedTools.size;
 
 buildHome();
 buildTools();
 syncTools();
 window.addEventListener("hashchange", route);
 new ResizeObserver(layout).observe(stageWrap);
-route();
+boot();
