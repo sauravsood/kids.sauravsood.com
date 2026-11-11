@@ -1,0 +1,242 @@
+:root {
+  --bg: #fff7ec;
+  --paper: #ffffff;
+  --ink: #3a3f4b;
+  --guide: #b4bbc8;
+  --soft: #f1e6d6;
+  --accent: #ff9f1c;
+  --radius: 28px;
+  --btn: 60px;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, -apple-system, sans-serif;
+  /* Stop iPad text selection, the long-press menu and the Pencil magnifier. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  touch-action: manipulation;
+}
+
+[hidden] { display: none !important; }
+
+.screen {
+  min-height: 100%;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+           max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+
+/* ---------- Home: pick an animal ---------- */
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 12px 0 24px;
+}
+.brand svg { width: 52px; height: 52px; }
+.brand h1 { margin: 0; font-size: 44px; font-weight: 800; letter-spacing: 0.5px; }
+
+.grid {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  max-width: 1100px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 42vw), 1fr));
+  gap: 20px;
+}
+
+.card {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--tint, var(--soft));
+  padding: 14%;
+  cursor: pointer;
+  box-shadow: 0 6px 0 rgba(58, 63, 75, 0.12);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.card:active { transform: translateY(4px) scale(0.98); box-shadow: 0 2px 0 rgba(58, 63, 75, 0.12); }
+.card svg { width: 100%; height: 100%; display: block; }
+
+.thumb path, .thumb circle, .thumb ellipse {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 22;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.thumb .dot { fill: var(--ink); stroke: none; }
+
+/* ---------- Draw ---------- */
+
+#draw {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 14px;
+  position: relative;
+}
+
+.stage-wrap {
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+}
+
+.stage {
+  position: relative;
+  background: var(--paper);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 0 rgba(58, 63, 75, 0.10);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.guide-layer, #ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+#ink { touch-action: none; cursor: crosshair; }
+.guide-layer svg { width: 100%; height: 100%; display: block; }
+
+.guide path, .guide circle, .guide ellipse {
+  fill: var(--paper);
+  stroke: var(--guide);
+  stroke-width: 13;
+  stroke-dasharray: 0.1 27;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.guide .dot { fill: var(--guide); stroke: none; }
+
+.icon-btn {
+  width: var(--btn);
+  height: var(--btn);
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: var(--paper);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgba(58, 63, 75, 0.12);
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+.icon-btn:active { transform: translateY(3px); }
+.icon-btn svg {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icon-btn[aria-pressed="true"] { background: var(--ink); }
+.icon-btn[aria-pressed="true"] svg { stroke: var(--paper); }
+.icon-btn.armed { background: #ff4d4d; animation: wiggle 0.35s ease 2; }
+.icon-btn.armed svg { stroke: #fff; }
+.star svg { fill: #ffd60a; stroke: #e0a800; }
+
+.back {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
+  z-index: 2;
+}
+
+.tools {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.row, .colors, .sizes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.swatch {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 4px solid var(--paper);
+  background: var(--c);
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(58, 63, 75, 0.15);
+  transition: transform 0.12s ease;
+}
+.swatch[aria-checked="true"] { transform: scale(1.18); outline: 4px solid var(--ink); outline-offset: 1px; }
+
+.size {
+  width: var(--btn);
+  height: var(--btn);
+  border: 0;
+  border-radius: 50%;
+  background: var(--paper);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgba(58, 63, 75, 0.12);
+}
+.size span { display: block; border-radius: 50%; background: var(--current, var(--ink)); }
+.size[aria-checked="true"] { outline: 4px solid var(--ink); outline-offset: 1px; }
+
+/* Wide screens (iPad landscape): tools move to the right-hand side. */
+@media (min-aspect-ratio: 5/4) {
+  #draw { grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr) auto; }
+  .tools { flex-direction: row; align-items: stretch; }
+  .colors { flex-direction: column; flex-wrap: wrap; max-height: calc(100vh - 32px); align-content: center; }
+  .row, .sizes { flex-direction: column; flex-wrap: nowrap; }
+  .row { justify-content: center; }
+}
+
+/* ---------- Celebration ---------- */
+
+.confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
+.confetti i {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  animation: pop 1.3s cubic-bezier(.2, .7, .3, 1) forwards;
+}
+@keyframes pop {
+  0% { transform: translate(0, 0) scale(0.4); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 0; }
+}
+@keyframes wiggle {
+  0%, 100% { rotate: 0deg; }
+  25% { rotate: -12deg; }
+  75% { rotate: 12deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti i, .icon-btn.armed { animation-duration: 0.01s; }
+}
