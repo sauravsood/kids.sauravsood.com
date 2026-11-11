@@ -334,14 +334,15 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
 .sheet {
   border: 0;
   border-radius: var(--radius);
-  padding: 28px;
+  padding: 0;
   background: var(--bg);
   color: var(--ink);
   box-shadow: 0 20px 60px rgba(58, 63, 75, 0.25);
 }
 .sheet::backdrop { background: rgba(58, 63, 75, 0.35); }
-.sheet form { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-.sheet-row { display: flex; gap: 12px; margin-top: 6px; }
+.sheet form { padding: 28px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.sheet-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 6px; }
+#signout { color: #d63c3c; }
 
 .toast {
   position: fixed;

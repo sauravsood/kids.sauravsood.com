@@ -186,6 +186,10 @@ $("who").addEventListener("click", () => {
   $("profile").showModal();
 });
 
+// Cancel, or a tap outside the card, closes it without saving.
+$("profile-cancel").addEventListener("click", () => $("profile").close());
+$("profile").addEventListener("click", (e) => { if (e.target === $("profile")) $("profile").close(); });
+
 $("profile-form").addEventListener("submit", async () => {
   const name = $("profile-name").value.trim();
   if (!name || name === state.me.kidName) return;
