@@ -78,6 +78,9 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
   z-index: 3;
 }
 
+.topback { width: 50px; height: 50px; flex: none; text-decoration: none; }
+.topback svg { width: 26px; height: 26px; }
+
 .who {
   display: flex;
   align-items: center;

@@ -93,6 +93,16 @@ function show(id) {
   for (const s of screens) s.hidden = s.id !== id;
   $("topbar").hidden = !(state.me && state.me.kidName);
   const viewing = id === "draw" && draw.classList.contains("readonly");
+  // Back button next to the name: drawing → its group, viewing → History, group → all groups.
+  const back = $("topback");
+  back.hidden = !(id === "draw" || id === "category");
+  if (id === "category") back.href = "#";
+  else if (viewing) back.href = "#history";
+  else if (id === "draw" && state.animal) {
+    const group = CATEGORIES.find((c) => c.id === state.lastCategory && c.animals.includes(state.animal.id))
+      || CATEGORIES.find((c) => c.animals.includes(state.animal.id));
+    back.href = group ? `#c/${group.id}` : "#";
+  }
   $("tab-animals").classList.toggle("active", id === "home" || id === "category" || (id === "draw" && !viewing));
   $("tab-history").classList.toggle("active", id === "history" || viewing);
 }
@@ -263,6 +273,7 @@ function buildHome() {
 }
 
 function showCategory(category) {
+  state.lastCategory = category.id;
   $("category-name").textContent = category.name;
   $("animals").innerHTML = category.animals.map((id) => ANIMALS.find((a) => a.id === id)).map((a) => `
     <li><a class="card" style="--tint:${a.tint}" href="#${a.id}" aria-label="${a.name}">
