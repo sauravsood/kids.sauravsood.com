@@ -1,0 +1,137 @@
+// Animal outlines, hand-drawn for this app. Every shape uses a 1000 x 1000 viewBox.
+// Shapes are listed back to front: each one is filled with the paper colour,
+// so later shapes hide the lines of earlier ones (a head in front of a body).
+// `dot` marks small filled details such as eyes and noses.
+
+export const ANIMALS = [
+  {
+    id: "cat",
+    name: "Cat",
+    tint: "#ffe3c2",
+    shapes: [
+      `<path d="M300 380 L300 140 L460 280 Z"/>`,
+      `<path d="M700 380 L700 140 L540 280 Z"/>`,
+      `<circle cx="500" cy="530" r="270"/>`,
+      `<circle class="dot" cx="405" cy="480" r="32"/>`,
+      `<circle class="dot" cx="595" cy="480" r="32"/>`,
+      `<path class="dot" d="M470 575 L530 575 L500 610 Z"/>`,
+      `<path d="M500 610 Q480 665 430 650 M500 610 Q520 665 570 650"/>`,
+      `<path d="M380 590 L190 560 M380 620 L200 650 M620 590 L810 560 M620 620 L800 650"/>`,
+    ],
+  },
+  {
+    id: "dog",
+    name: "Dog",
+    tint: "#e8dccb",
+    shapes: [
+      `<ellipse cx="500" cy="500" rx="235" ry="260"/>`,
+      `<path d="M320 300 C200 300 140 520 210 650 C250 720 330 660 330 520 Z"/>`,
+      `<path d="M680 300 C800 300 860 520 790 650 C750 720 670 660 670 520 Z"/>`,
+      `<path d="M465 715 Q470 800 500 805 Q530 800 535 715 Z"/>`,
+      `<ellipse cx="500" cy="630" rx="120" ry="90"/>`,
+      `<ellipse class="dot" cx="500" cy="590" rx="45" ry="30"/>`,
+      `<path d="M500 620 L500 665 M500 665 Q460 700 430 670 M500 665 Q540 700 570 670"/>`,
+      `<circle class="dot" cx="420" cy="460" r="30"/>`,
+      `<circle class="dot" cx="580" cy="460" r="30"/>`,
+    ],
+  },
+  {
+    id: "fish",
+    name: "Fish",
+    tint: "#cdeefd",
+    shapes: [
+      `<path d="M740 500 L900 370 Q860 500 900 630 Z"/>`,
+      `<path d="M440 360 Q520 220 640 380 Z"/>`,
+      `<path d="M470 640 Q530 740 600 630 Z"/>`,
+      `<path d="M150 500 C300 290 640 290 770 500 C640 710 300 710 150 500 Z"/>`,
+      `<path d="M360 400 Q410 500 360 600"/>`,
+      `<circle class="dot" cx="270" cy="470" r="28"/>`,
+      `<path d="M180 520 Q215 545 250 530"/>`,
+      `<circle cx="120" cy="330" r="30"/>`,
+      `<circle cx="180" cy="230" r="20"/>`,
+    ],
+  },
+  {
+    id: "elephant",
+    name: "Elephant",
+    tint: "#e2e3f3",
+    shapes: [
+      `<path d="M860 520 Q920 580 885 660"/>`,
+      `<path d="M700 680 L700 850 L800 850 L800 640 Z"/>`,
+      `<path d="M400 680 L400 850 L500 850 L500 720 Z"/>`,
+      `<ellipse cx="610" cy="550" rx="270" ry="200"/>`,
+      `<path d="M210 450 C150 600 150 740 230 790 C270 815 290 770 265 755 C215 720 225 610 270 540 Z"/>`,
+      `<circle cx="340" cy="420" r="170"/>`,
+      `<path d="M360 270 C520 230 580 420 520 560 C480 640 360 620 360 560 Z"/>`,
+      `<circle class="dot" cx="270" cy="400" r="22"/>`,
+      `<path d="M240 520 Q200 560 160 540"/>`,
+    ],
+  },
+  {
+    id: "lion",
+    name: "Lion",
+    tint: "#ffe7a3",
+    shapes: [
+      `<path d="M500 200 Q592 115 639 232 Q759 196 750 320 Q874 340 812 449 Q915 520 812 591 Q874 700 750 720 Q759 844 639 808 Q592 925 500 840 Q408 925 361 808 Q241 844 250 720 Q126 700 188 591 Q85 520 188 449 Q126 340 250 320 Q241 196 361 232 Q408 115 500 200Z"/>`,
+      `<circle cx="350" cy="340" r="55"/>`,
+      `<circle cx="650" cy="340" r="55"/>`,
+      `<circle cx="500" cy="520" r="215"/>`,
+      `<circle class="dot" cx="425" cy="475" r="28"/>`,
+      `<circle class="dot" cx="575" cy="475" r="28"/>`,
+      `<path class="dot" d="M465 560 L535 560 L500 600 Z"/>`,
+      `<path d="M500 600 L500 630 M500 630 Q465 675 425 645 M500 630 Q535 675 575 645"/>`,
+    ],
+  },
+  {
+    id: "bird",
+    name: "Bird",
+    tint: "#d6f5d6",
+    shapes: [
+      `<path d="M430 760 L410 880 M380 880 L440 880 M560 760 L580 880 M550 880 L610 880"/>`,
+      `<path d="M470 285 Q440 200 500 175 M510 280 Q530 205 590 210"/>`,
+      `<path d="M700 450 L840 505 L700 560 Z"/>`,
+      `<circle cx="490" cy="530" r="250"/>`,
+      `<path d="M330 520 Q420 680 600 590 Q540 480 330 520 Z"/>`,
+      `<circle class="dot" cx="610" cy="440" r="28"/>`,
+    ],
+  },
+  {
+    id: "turtle",
+    name: "Turtle",
+    tint: "#d5f0e3",
+    shapes: [
+      `<path d="M210 600 L120 640 L210 650 Z"/>`,
+      `<ellipse cx="320" cy="670" rx="60" ry="90"/>`,
+      `<ellipse cx="680" cy="670" rx="60" ry="90"/>`,
+      `<circle cx="860" cy="560" r="80"/>`,
+      `<circle class="dot" cx="885" cy="535" r="16"/>`,
+      `<path d="M860 600 Q885 615 905 600"/>`,
+      `<path d="M180 620 C180 260 820 260 820 620 Z"/>`,
+      `<path d="M440 400 L560 400 L600 500 L560 600 L440 600 L400 500 Z"/>`,
+      `<path d="M440 400 L380 320 M560 400 L620 320 M400 500 L260 500 M600 500 L740 500 M440 600 L420 620 M560 600 L580 620"/>`,
+    ],
+  },
+  {
+    id: "butterfly",
+    name: "Butterfly",
+    tint: "#f6dcf2",
+    shapes: [
+      `<path d="M490 300 Q450 190 390 170 M510 300 Q550 190 610 170"/>`,
+      `<circle class="dot" cx="385" cy="168" r="18"/>`,
+      `<circle class="dot" cx="615" cy="168" r="18"/>`,
+      `<path d="M480 450 C320 130 110 220 160 420 C200 540 400 530 480 490 Z"/>`,
+      `<path d="M520 450 C680 130 890 220 840 420 C800 540 600 530 520 490 Z"/>`,
+      `<path d="M480 520 C330 540 200 700 290 790 C370 860 470 720 485 590 Z"/>`,
+      `<path d="M520 520 C670 540 800 700 710 790 C630 860 530 720 515 590 Z"/>`,
+      `<circle cx="300" cy="380" r="55"/>`,
+      `<circle cx="700" cy="380" r="55"/>`,
+      `<circle cx="360" cy="680" r="35"/>`,
+      `<circle cx="640" cy="680" r="35"/>`,
+      `<ellipse cx="500" cy="530" rx="30" ry="230"/>`,
+    ],
+  },
+];
+
+export function animalSvg(animal, className) {
+  return `<svg class="${className}" viewBox="0 0 1000 1000" aria-hidden="true">${animal.shapes.join("")}</svg>`;
+}

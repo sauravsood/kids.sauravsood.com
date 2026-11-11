@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Trace</title>
+  <meta name="description" content="Pick an animal and trace it in your favourite colours.">
+  <meta name="theme-color" content="#fff7ec">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Trace">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="home" class="screen">
+    <header class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M14 50 L40 14 L50 22 L24 58 L12 60 Z" fill="#ff9f1c"/><path d="M40 14 L44 8 L54 16 L50 22 Z" fill="#ff4d6d"/><path d="M14 50 L24 58 L12 60 Z" fill="#3a3f4b"/></svg>
+      <h1>Trace</h1>
+    </header>
+    <ul id="animals" class="grid" aria-label="Animals"></ul>
+  </main>
+
+  <section id="draw" class="screen" hidden>
+    <button id="back" class="icon-btn back" aria-label="Back to animals">
+      <svg viewBox="0 0 24 24"><path d="M4 11 L12 4 L20 11 M6 9.5 V20 H18 V9.5"/></svg>
+    </button>
+
+    <div id="stage-wrap" class="stage-wrap">
+      <div id="stage" class="stage">
+        <div id="guide" class="guide-layer"></div>
+        <canvas id="ink"></canvas>
+      </div>
+    </div>
+
+    <div class="tools" role="toolbar" aria-label="Drawing tools">
+      <div id="colors" class="colors" role="radiogroup" aria-label="Colours"></div>
+      <div class="row">
+        <div id="sizes" class="sizes" role="radiogroup" aria-label="Crayon size"></div>
+        <button id="eraser" class="icon-btn" aria-label="Eraser" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M3 15 L12 6 L19 13 L12 20 H7 Z M7.5 10.5 L15 18 M12 20 H21"/></svg>
+        </button>
+        <button id="undo" class="icon-btn" aria-label="Undo">
+          <svg viewBox="0 0 24 24"><path d="M9 5 L4 10 L9 15 M4 10 H14 A5 5 0 0 1 14 20 H10"/></svg>
+        </button>
+        <button id="clear" class="icon-btn" aria-label="Clear">
+          <svg viewBox="0 0 24 24"><path d="M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 21 H17 L18 7 M10 11 V17 M14 11 V17"/></svg>
+        </button>
+        <button id="star" class="icon-btn star" aria-label="All done">
+          <svg viewBox="0 0 24 24"><path d="M12 2.5 L14.9 8.6 L21.5 9.3 L16.6 13.8 L18 20.5 L12 17.1 L6 20.5 L7.4 13.8 L2.5 9.3 L9.1 8.6 Z"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="confetti" class="confetti" aria-hidden="true"></div>
+  </section>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
