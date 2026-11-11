@@ -1,6 +1,21 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <!-- Google tag (gtag.js) for sauravsood.com and its subdomains.
+       Page views are sent from app.js on every route change, so the config
+       below turns off the automatic one. Ad signals are off: this is a kids' app. -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K71K5101R8"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-K71K5101R8', {
+      send_page_view: false,
+      allow_google_signals: false,
+      allow_ad_personalization_signals: false
+    });
+  </script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Trace</title>
