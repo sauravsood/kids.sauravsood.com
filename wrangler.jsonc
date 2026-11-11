@@ -14,11 +14,11 @@
     {
       "binding": "DB",
       "database_name": "kids",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+      "database_id": "392c4625-865b-4a7e-902c-187fdbf9185a"
     }
   ],
   "vars": {
     // OAuth "Web application" client from Google Cloud Console. Not a secret.
-    "GOOGLE_CLIENT_ID": ""
+    "GOOGLE_CLIENT_ID": "250113524401-7vmhm9ffv7nb73aa8i0v070mj3n6jspi.apps.googleusercontent.com"
   }
 }
