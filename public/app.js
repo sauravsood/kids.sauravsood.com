@@ -1,5 +1,5 @@
 import { getStroke } from "./vendor/perfect-freehand/perfect-freehand.mjs";
-import { ANIMALS, animalSvg } from "./animals.js";
+import { ANIMALS, CATEGORIES, animalSvg } from "./animals.js";
 
 // Drawing happens in a 1000 x 1000 space that matches the animal outlines,
 // so strokes stay lined up with the picture whatever the screen size.
@@ -15,7 +15,7 @@ const USAGE_FLUSH_MS = 30_000;   // send time spent to the server this often
 const SAVE_DELAY_MS = 1200;      // save a drawing this long after the last change
 
 const $ = (id) => document.getElementById(id);
-const screens = ["signin", "hello", "home", "history", "draw"].map($);
+const screens = ["signin", "hello", "home", "category", "history", "draw"].map($);
 const draw = $("draw");
 const stageWrap = $("stage-wrap");
 const stage = $("stage");
@@ -92,7 +92,7 @@ function formatTime(total) {
 function show(id) {
   for (const s of screens) s.hidden = s.id !== id;
   $("topbar").hidden = !(state.me && state.me.kidName);
-  $("tab-animals").classList.toggle("active", id === "home" || id === "draw");
+  $("tab-animals").classList.toggle("active", id === "home" || id === "category" || id === "draw");
   $("tab-history").classList.toggle("active", id === "history");
 }
 
@@ -251,10 +251,19 @@ document.addEventListener("visibilitychange", () => {
 // ---------- Screens ----------
 
 function buildHome() {
-  $("animals").innerHTML = ANIMALS.map((a) => `
+  $("categories").innerHTML = CATEGORIES.map((c) => `
+    <li><a class="card labelled" style="--tint:${c.tint}" href="#c/${c.id}">
+      ${animalSvg(c, "thumb")}<span>${c.name}</span>
+    </a></li>`).join("");
+}
+
+function showCategory(category) {
+  $("category-name").textContent = category.name;
+  $("animals").innerHTML = category.animals.map((id) => ANIMALS.find((a) => a.id === id)).map((a) => `
     <li><a class="card" style="--tint:${a.tint}" href="#${a.id}" aria-label="${a.name}">
       ${animalSvg(a, "thumb")}
     </a></li>`).join("");
+  show("category");
 }
 
 async function route() {
@@ -271,6 +280,10 @@ async function route() {
 
   const hash = location.hash.slice(1);
   if (hash === "history") return showHistory();
+
+  const group = hash.match(/^c\/(\w+)$/);
+  const category = group && CATEGORIES.find((c) => c.id === group[1]);
+  if (category) return showCategory(category);
 
   const existing = hash.match(/^d\/(\d+)$/);
   if (existing) return openDrawing(Number(existing[1]));
