@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Rebuild the Planetarium's sky engine from the fork and copy it into
-# public/planetarium/sky/. Needs git, scons and Emscripten 1.39.17
+# public/sky/view/. Needs git, scons and Emscripten 1.39.17
 # (newer Emscripten releases reject the engine's build flags):
 #   git clone https://github.com/emscripten-core/emsdk && cd emsdk
 #   ./emsdk install 1.39.17 && ./emsdk activate 1.39.17 && source ./emsdk_env.sh
 set -euo pipefail
 REPO=${REPO:-https://github.com/sauravsood/stellarium-web-engine.git}
 REF=${REF:-master}
-OUT="$(cd "$(dirname "$0")/.." && pwd)/public/planetarium/sky"
+OUT="$(cd "$(dirname "$0")/.." && pwd)/public/sky/view"
 WORK=$(mktemp -d)
 git clone --depth 1 --branch "$REF" "$REPO" "$WORK/swe"
 cd "$WORK/swe"
