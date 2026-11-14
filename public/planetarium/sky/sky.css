@@ -1,0 +1,158 @@
+:root {
+  --night: #0b1530;
+  --glass: rgba(16, 26, 58, 0.72);
+  --edge: rgba(159, 180, 255, 0.28);
+  --on: #ffd166;
+  --text: #f4f1e6;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--night);
+  color: var(--text);
+  font-family: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
+}
+
+#sky {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  touch-action: none;
+  display: block;
+}
+
+button, a { font: inherit; color: inherit; touch-action: manipulation; }
+[hidden] { display: none !important; }
+
+svg { display: block; }
+
+.round, .switches button {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid var(--edge);
+  background: var(--glass);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  text-decoration: none;
+}
+.round svg, .switches svg {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.corner {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  display: flex;
+  gap: 10px;
+  z-index: 2;
+}
+
+.switches {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 999px;
+  background: rgba(8, 14, 34, 0.5);
+  z-index: 2;
+}
+.switches button[aria-pressed="true"] {
+  background: var(--on);
+  border-color: var(--on);
+  color: #2a2140;
+}
+
+.find {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  top: max(14px, env(safe-area-inset-top));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 2;
+}
+.find button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 8px 18px 8px 10px;
+  border-radius: 999px;
+  border: 2px solid var(--edge);
+  background: var(--glass);
+  font-weight: 700;
+  font-size: 17px;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.find svg { width: 44px; height: 44px; flex: none; }
+.find button:active, .round:active, .switches button:active { transform: scale(0.94); }
+
+.picked {
+  position: fixed;
+  top: max(22px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 2px solid var(--edge);
+  font-weight: 800;
+  font-size: 22px;
+  z-index: 2;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--night);
+  z-index: 3;
+  transition: opacity 0.6s;
+}
+.loading svg { width: 72px; height: 72px; fill: var(--on); animation: bob 1.4s ease-in-out infinite; }
+.loading.done { opacity: 0; pointer-events: none; }
+@keyframes bob { 50% { transform: translateY(-10px) rotate(-8deg); } }
+
+/* Phone: labels off, find buttons become a row above the switches. */
+@media (max-width: 640px) {
+  .find { top: auto; right: 50%; transform: translateX(50%); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 96px); flex-direction: row; }
+  .find span { display: none; }
+  .find button { padding: 8px; min-height: 56px; }
+  .round, .switches button { width: 54px; height: 54px; }
+  .switches { gap: 8px; padding: 8px; }
+  .picked { top: auto; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 170px); font-size: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading svg { animation: none; }
+}

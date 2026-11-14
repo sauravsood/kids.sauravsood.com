@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Night sky · Planetarium</title>
+  <meta name="theme-color" content="#0b1530">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="icon" href="../icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="sky.css">
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K71K5101R8"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-K71K5101R8');
+  </script>
+</head>
+<body>
+  <canvas id="sky"></canvas>
+
+  <div id="loading" class="loading" role="status">
+    <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M44 10 A22 22 0 1 0 54 40 A18 18 0 1 1 44 10 Z"/></svg>
+  </div>
+
+  <nav class="corner" aria-label="Go back">
+    <a class="round" href="/" aria-label="Home">
+      <svg viewBox="0 0 24 24"><path d="M3.5 11.5 L12 4 L20.5 11.5 M6 9.5 V20 H10 V14.5 H14 V20 H18 V9.5"/></svg>
+    </a>
+    <a class="round" href="../" aria-label="Back to Planetarium">
+      <svg viewBox="0 0 24 24"><path d="M15 5 L8 12 L15 19"/></svg>
+    </a>
+  </nav>
+
+  <div id="picked" class="picked" hidden></div>
+
+  <!-- Things to find: tapping one swings the sky round to it. -->
+  <div class="find" role="group" aria-label="Find">
+    <button data-find="Moon" aria-label="Find the Moon">
+      <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" fill="#f4f1e6"/><circle cx="15" cy="16" r="3" fill="#d9d4c3"/><circle cx="24" cy="25" r="4" fill="#d9d4c3"/><circle cx="26" cy="13" r="2" fill="#d9d4c3"/></svg>
+      <span>Moon</span>
+    </button>
+    <button data-find="Jupiter" aria-label="Find Jupiter">
+      <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" fill="#e8c9a0"/><path d="M7 15 H33 M6.5 21 H33.5 M8 27 H32" stroke="#c48a5a" stroke-width="3"/><ellipse cx="25" cy="24" rx="3" ry="2" fill="#b0563a"/></svg>
+      <span>Jupiter</span>
+    </button>
+    <button data-find="Orion" aria-label="Find Orion">
+      <svg viewBox="0 0 40 40"><g fill="#fff"><circle cx="12" cy="7" r="2.6"/><circle cx="28" cy="9" r="2.2"/><circle cx="16" cy="20" r="1.8"/><circle cx="20" cy="19.5" r="1.8"/><circle cx="24" cy="19" r="1.8"/><circle cx="13" cy="33" r="2.2"/><circle cx="29" cy="32" r="2.6"/></g><path d="M12 7 L16 20 L13 33 M28 9 L24 19 L29 32" stroke="#9fb4ff" stroke-width="1.2" fill="none"/></svg>
+      <span>Orion</span>
+    </button>
+    <button data-find="Big Dipper" aria-label="Find the Big Dipper">
+      <svg viewBox="0 0 40 40"><path d="M4 12 L11 14 L17 17 L22 21 L23 30 L34 31 L35 22 L22 21" stroke="#9fb4ff" stroke-width="1.2" fill="none"/><g fill="#fff"><circle cx="4" cy="12" r="2"/><circle cx="11" cy="14" r="2"/><circle cx="17" cy="17" r="2"/><circle cx="22" cy="21" r="2"/><circle cx="23" cy="30" r="2"/><circle cx="34" cy="31" r="2"/><circle cx="35" cy="22" r="2"/></g></svg>
+      <span>Big Dipper</span>
+    </button>
+  </div>
+
+  <!-- Switches for what the sky shows. -->
+  <div class="switches" role="toolbar" aria-label="Sky">
+    <button id="t-lines" aria-pressed="true" aria-label="Star lines">
+      <svg viewBox="0 0 24 24"><path d="M4 18 L9 9 L15 13 L20 5"/><circle cx="4" cy="18" r="1.8"/><circle cx="9" cy="9" r="1.8"/><circle cx="15" cy="13" r="1.8"/><circle cx="20" cy="5" r="1.8"/></svg>
+    </button>
+    <button id="t-art" aria-pressed="false" aria-label="Star pictures">
+      <svg viewBox="0 0 24 24"><path d="M3 15 C6 9 10 8 13 10 L18 6 L20 9 L15 13 C16 16 13 20 8 20 Z"/><circle cx="16.5" cy="8.5" r="0.6"/></svg>
+    </button>
+    <button id="t-ground" aria-pressed="true" aria-label="Ground">
+      <svg viewBox="0 0 24 24"><path d="M2 18 C6 13 9 13 12 16 C15 12 19 12 22 16 V21 H2 Z"/></svg>
+    </button>
+    <button id="t-night" aria-pressed="true" aria-label="Make it night">
+      <svg viewBox="0 0 24 24"><path d="M15 3 A9 9 0 1 0 21 15 A7 7 0 1 1 15 3 Z"/></svg>
+    </button>
+    <button id="t-here" aria-pressed="false" aria-label="Use where I am">
+      <svg viewBox="0 0 24 24"><path d="M12 21 C12 21 5 14 5 9.5 A7 7 0 0 1 19 9.5 C19 14 12 21 12 21 Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+    </button>
+  </div>
+
+  <script src="engine/stellarium-web-engine.js"></script>
+  <script src="sky.js"></script>
+</body>
+</html>

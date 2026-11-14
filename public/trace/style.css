@@ -390,3 +390,12 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
 
 /* The four group tiles sit in a 2 x 2 block. */
 #categories { grid-template-columns: repeat(2, 1fr); max-width: min(760px, calc((100dvh - 140px) * 1.05)); }
+
+/* Way back to the kids hub at "/". */
+.corner-home {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
+  text-decoration: none;
+}
+.tophome { text-decoration: none; }

@@ -1,5 +1,6 @@
 {
-  // Trace: static app in public/, plus a small API Worker for sign-in,
+  // Kids hub: static pages in public/ (hub, Trace, Planetarium, 3D Dino), plus
+  // a small API Worker for Trace's sign-in,
   // saved drawings and stats. Only /api/* runs the Worker; everything else
   // is served straight from public/.
   "name": "kids-sauravsood-com",
