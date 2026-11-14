@@ -6,12 +6,12 @@ A home page of calm, hands-on things for kids, built for iPad first. Apps are gr
 | --- | --- | --- | --- |
 | Creativity | Trace | `/trace/` | Live |
 | | Drawings Come Alive | `/alive` | Coming soon |
-| | Pixel Art | `/pixel` | Coming soon |
+| | Pixel Art | `/pixel/` | Live |
 | | Music Lab | `/music` | Coming soon |
 | Explore | Planetarium | `/sky/` | Live (was `/planetarium/`, which redirects) |
 | | 3D Dino | `/dino/` | Live |
-| | Sand Lab | `/sand` | Coming soon |
-| Puzzles & Thinking | Trust Game | `/trust` | Coming soon |
+| | Sand Lab | `/sand/` | Live |
+| Puzzles & Thinking | Trust Game | `/trust/` | Live (ages 10+) |
 | | Chess | `/chess` | Coming soon |
 | Life Skills | Pocket Money | `/money` | Coming soon |
 | | My Routines | `/routines` | Coming soon |
@@ -30,6 +30,8 @@ Everything is plain HTML, CSS and JavaScript in `public/`, with no build step fo
 Apps are listed in `CATEGORIES` in `public/tiles.js`. A new app goes in with `soon: true` and no `href`, so it shows as a "Coming soon" tile that can't be tapped. To ship it, drop `soon`, add `href`, and put its landing page at `public/<slug>/index.html`.
 
 Redirects for moved pages live in `public/_redirects`.
+
+Apps built by someone else live in `public/<slug>/app/`, next to their landing page. Each one gets a Home button and the grown-up check on outside links from one line before `</body>`: `<script src="/shared/app-home.js" data-corner="top-left" defer></script>` (corners: `top-left`, `top-right`, `bottom-left`, `bottom-right`). Their kid-safe changes are kept on a `kids-sauravsood` branch of a fork in the sauravsood account.
 
 ## Trace (`/trace/`)
 
@@ -58,10 +60,30 @@ Redirects for moved pages live in `public/_redirects`.
 - Rebuild with `scripts/build-dino.sh` (Node 22.13+).
 - Built from s010s/prehistoric-animal-museum `d2ea7a7` plus the rename patch.
 
+## Trust Game (`/trust/`)
+
+- `public/trust/app/` is a copy of the game from the `kids-sauravsood` branch of the fork (no build step). Sound starts off, and the share buttons, social images and outside translation links are removed. Home button top-left.
+- Built from ncase/trust `6ec45d7` plus two small commits.
+
+## Pixel Art (`/pixel/`)
+
+- `public/pixel/app/` is Piskel's production build (`dest/prod`, built with `npx grunt build`) plus its `LICENSE`. Home button bottom-left.
+- The open-source Piskel has no online saving or sharing; pictures only leave the iPad if a grown-up uses Export.
+- The fork's one change lets Safari (and so iPad) in without the "unsupported browser" message.
+- Built from piskelapp/piskel `8624c94` plus that change.
+
+## Sand Lab (`/sand/`)
+
+- `public/sand/app/` is Sandspiel's webpack build (`npm install --legacy-peer-deps && npm run build`, needs Rust with the `wasm32-unknown-unknown` target and `wasm-pack`), without source maps, plus its `LICENSE`.
+- The fork keeps only the local sandbox and the element guide. Uploading, browsing, likes, sign-in (Firebase), Sentry, ads, analytics, the service worker and the leave-page prompt are taken out, so nothing made in it leaves the device. Buttons are bigger, and the router keeps the address at `/sand/app/`.
+- Built from MaxBittker/sandspiel `9936e06` plus three commits.
+
 ## Licences
 
 - **Stellarium Web Engine** is AGPL-3.0 (© Stellarium Labs SRL and contributors). The Planetarium page credits it, ships the licence text, and links to the source of the copy that runs here.
 - **Prehistoric Animal Museum** code is AGPL-3.0-only; its writing, narration and exhibit backgrounds are CC BY-NC-SA 4.0 (non-commercial: fine for this ad-free site, but this part can't be used commercially); each 3D model keeps its own CC BY 4.0 licence; its name and logo are reserved by its brand policy. The museum's `LICENSE`, `LICENSES/` and `THIRD_PARTY_NOTICES.md` ship inside `public/dino/museum/`, and the 3D Dino page credits the original and links to the source.
+- **The Evolution of Trust** is CC0 (public domain), music by Komiku (CC0); its sound effects are CC0, CC Sampling+ and CC BY-NC (fine for this ad-free site).
+- **Piskel** is Apache-2.0. **Sandspiel** is MIT. Each ships its `LICENSE` in its `app/` folder and is credited on its landing page.
 - The AGPL asks that people using a modified copy over the web can get its source. Each project page links to the source of the copy running here and to this repo.
 
 ## Run locally

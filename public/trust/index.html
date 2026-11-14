@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Trust Game</title>
+  <meta name="description" content="An interactive story about why and how people trust each other.">
+  <meta name="theme-color" content="#fff7ec">
+  <link rel="icon" href="/shared/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/shared/kids.css">
+  <script src="/shared/grownup.js" defer></script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K71K5101R8"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    // Ad signals are off: this site is for kids.
+    gtag('config', 'G-K71K5101R8', { allow_google_signals: false, allow_ad_personalization_signals: false });
+  </script>
+  <style>
+    .hero { --tint: #e3f4ec;  }
+    .go { background: #2f6b5a; color: #fff; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="bar">
+      <a class="round" href="/" aria-label="Home">
+        <svg viewBox="0 0 24 24"><path d="M3.5 11.5 L12 4 L20.5 11.5 M6 9.5 V20 H10 V14.5 H14 V20 H18 V9.5"/></svg>
+      </a>
+      <h1>Trust Game</h1>
+    </header>
+
+    <section class="hero">
+      <div>
+        <span class="age">Ages 10+</span>
+        <h2>Why do people trust each other?</h2>
+        <p>Play little games of give-and-take, then watch what happens when lots of players meet. It comes in short chapters, so you can stop after any of them.</p>
+        <a class="go" href="app/">
+          <svg viewBox="0 0 24 24"><path d="M5 12 H19 M13 6 L19 12 L13 18"/></svg>
+          Start
+        </a>
+      </div>
+      <div class="art">
+        <svg viewBox="0 0 200 160" style="width:100%;max-width:380px;height:auto;margin:0 auto" aria-hidden="true">
+    <circle cx="62" cy="62" r="26" fill="#ffd166"/><circle cx="138" cy="62" r="26" fill="#9fd8c4"/>
+    <circle cx="54" cy="58" r="3.5" fill="#3a3f4b"/><circle cx="70" cy="58" r="3.5" fill="#3a3f4b"/><path d="M54 70 q8 6 16 0" fill="none" stroke="#3a3f4b" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="130" cy="58" r="3.5" fill="#3a3f4b"/><circle cx="146" cy="58" r="3.5" fill="#3a3f4b"/><path d="M130 70 q8 6 16 0" fill="none" stroke="#3a3f4b" stroke-width="3" stroke-linecap="round"/>
+    <path d="M62 96 V122 M138 96 V122" stroke="#3a3f4b" stroke-width="5" stroke-linecap="round"/>
+    <path d="M62 106 Q100 128 138 106" fill="none" stroke="#ff4d6d" stroke-width="5" stroke-linecap="round"/>
+  </svg>
+      </div>
+    </section>
+
+    <section class="look">
+      <h3>Good to know</h3>
+      <ul>
+        <li><span><b>Sound</b>It starts off. Tap the speaker at the bottom to turn it on.</span></li>
+        <li><span><b>Chapters</b>Use the chapter list at the bottom to pick up where you stopped.</span></li>
+        <li><span><b>Grown-ups</b>It's about game theory. Great to play together and talk about after.</span></li>
+      </ul>
+    </section>
+
+    <footer class="credits">
+      <p>Trust Game is <a href="https://ncase.me/trust/">The Evolution of Trust</a> by Nicky Case, dedicated to the public domain (<a href="app/LICENSE">CC0</a>). Music by Komiku; sound effects from freesound.org contributors under CC0, CC Sampling+ and CC BY-NC; libraries PIXI.js, Howler.js, TweenJS, Balloon.css, Q, MinPubSub and Pegasus.</p>
+      <p>The copy here has sound off to start and no sharing buttons or outside links. Source: <a href="https://github.com/sauravsood/trust/tree/kids-sauravsood">sauravsood/trust</a> (game) and <a href="https://github.com/sauravsood/kids.sauravsood.com">sauravsood/kids.sauravsood.com</a> (this page).</p>
+    </footer>
+  </main>
+</body>
+</html>
