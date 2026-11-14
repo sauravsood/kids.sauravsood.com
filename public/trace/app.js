@@ -39,7 +39,7 @@ const state = {
   cleared: null,        // strokes kept after "clear", so undo can bring them back
   current: null,
   activePointer: null,
-  penSeenAt: 0,
+  penSeenAt: -Infinity, // no Pencil yet, so fingers draw straight away
   lastActivity: Date.now(),
   pendingSeconds: 0,
 };
