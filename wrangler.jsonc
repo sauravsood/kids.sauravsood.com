@@ -18,6 +18,21 @@
       "database_id": "392c4625-865b-4a7e-902c-187fdbf9185a"
     }
   ],
+  // Settings for PR preview builds (`wrangler preview`). Previews reuse the
+  // same D1 database, but they can't write to it: Google sign-in only allows
+  // https://kids.sauravsood.com, and Dev sign-in is off outside local dev.
+  "previews": {
+    "vars": {
+      "GOOGLE_CLIENT_ID": "250113524401-7vmhm9ffv7nb73aa8i0v070mj3n6jspi.apps.googleusercontent.com"
+    },
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "kids",
+        "database_id": "392c4625-865b-4a7e-902c-187fdbf9185a"
+      }
+    ]
+  },
   "vars": {
     // OAuth "Web application" client from Google Cloud Console. Not a secret.
     "GOOGLE_CLIENT_ID": "250113524401-7vmhm9ffv7nb73aa8i0v070mj3n6jspi.apps.googleusercontent.com"
