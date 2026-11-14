@@ -13,8 +13,8 @@ A home page of calm, hands-on things for kids, built for iPad first. Apps are gr
 | | Sand Lab | `/sand/` | Live |
 | Puzzles & Thinking | Trust Game | `/trust/` | Live (ages 10+) |
 | | Chess | `/chess` | Coming soon |
-| Life Skills | Pocket Money | `/money` | Coming soon |
-| | My Routines | `/routines` | Coming soon |
+| Life Skills | Pocket Money | `/money/` | Live |
+| | My Routines | `/routines/` | Live |
 
 Everything is plain HTML, CSS and JavaScript in `public/`, with no build step for this repo. Landing pages share `public/shared/kids.css`.
 
@@ -86,6 +86,14 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - The fork keeps only the local sandbox and the element guide. Uploading, browsing, likes, sign-in (Firebase), Sentry, ads, analytics, the service worker and the leave-page prompt are taken out, so nothing made in it leaves the device. Buttons are bigger, and the router keeps the address at `/sand/app/`.
 - Built from MaxBittker/sandspiel `9936e06` plus three commits.
 
+## Pocket Money (`/money/`) and My Routines (`/routines/`)
+
+- Both are our own small apps in `public/<slug>/app/` (plain HTML, CSS and one ES module each). They are inspired by Actual and Loop Habit Tracker but use none of their code.
+- **Pocket Money:** a grown-up adds coins to a tray, the child taps a jar (Save, Spend, Share) to drop each coin in, and the Save jar counts towards one goal with a picture. Coins are whole numbers with no currency.
+- **My Routines:** a grown-up picks from a set of picture routines, the child taps a card when it's done. "This week" shows what was done, with no streaks, scores or marks for missed days. Done marks older than 60 days are dropped.
+- Grown-up parts (adding or removing coins, choosing routines) sit behind the same sum check as outside links: `window.askGrownUp(text)` from `public/shared/grownup.js`.
+- Both use the same Google sign-in and session as Trace through `public/shared/account.js` (`signedIn()`, `loadState(app)`, `saveState(app, data)`). Each app saves one JSON document per account in the D1 table `app_state` through `GET`/`PUT /api/state/<app>` (`money` or `routines`, up to 100 KB, last write wins).
+
 ## Licences
 
 - **Stellarium Web Engine** is AGPL-3.0 (© Stellarium Labs SRL and contributors). The Planetarium page credits it, ships the licence text, and links to the source of the copy that runs here.
@@ -106,7 +114,7 @@ npx wrangler dev
 
 Deployed by Cloudflare Workers Builds from `main` with `npx wrangler deploy`. `wrangler.jsonc` serves `public/` as static files and runs `src/worker.js` for `/api/*` only.
 
-- **Database:** Cloudflare D1 (`kids`), bound as `DB`. The Worker creates its tables on first use.
+- **Database:** Cloudflare D1 (`kids`), bound as `DB`. The Worker creates its tables on first use (`users`, `sessions`, `drawings`, `usage`, `app_state`).
 - **Google sign-in:** a Google OAuth *Web application* client with `https://kids.sauravsood.com` as an authorised JavaScript origin. Its client ID goes in `GOOGLE_CLIENT_ID` in `wrangler.jsonc`. Trace moving to `/trace/` doesn't change the origin, so nothing changes here.
 - Sessions are random tokens in an HttpOnly cookie (`Path=/`), stored hashed in D1.
 - **Analytics:** every page carries GA4 `G-K71K5101R8` with Google signals and ad personalisation off. Trace sends its own `page_view` per screen with readable paths (`/trace/history`, `/trace/draw/<animal>`, `/trace/drawing/view` with no drawing ids), so GA4's "page changes based on browser history events" setting should stay off.

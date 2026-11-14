@@ -1,4 +1,6 @@
-// API for Trace: Google sign-in, sessions, saved drawings and usage stats.
+// API for the kids site: Google sign-in and sessions (shared by every app),
+// Trace's saved drawings and usage stats, and one saved JSON document per
+// app for Pocket Money and My Routines.
 // Static files in public/ are served by Cloudflare's asset handler; only
 // /api/* requests reach this Worker (see run_worker_first in wrangler.jsonc).
 
@@ -7,6 +9,8 @@ const SESSION_DAYS = 180;
 const MAX_BODY = 1_800_000; // D1 rows are limited to about 2 MB
 const MAX_THUMB = 150_000;
 const ANIMAL_RE = /^[a-z]{2,20}$/;
+const STATE_APPS = new Set(["money", "routines"]);
+const MAX_STATE = 100_000;
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS users (
@@ -35,6 +39,12 @@ const SCHEMA = [
      day TEXT NOT NULL,
      seconds INTEGER NOT NULL DEFAULT 0,
      PRIMARY KEY (user_id, day))`,
+  `CREATE TABLE IF NOT EXISTS app_state (
+     user_id INTEGER NOT NULL,
+     app TEXT NOT NULL,
+     data TEXT NOT NULL,
+     updated_at INTEGER NOT NULL,
+     PRIMARY KEY (user_id, app))`,
 ];
 
 let schemaReady = null;
@@ -108,6 +118,30 @@ async function route(request, env, url) {
       ]);
     }
     return json(await stats(env, user.id));
+  }
+
+  // One JSON document per user and app (Pocket Money, My Routines).
+  const stateMatch = path.match(/^\/api\/state\/([a-z]+)$/);
+  if (stateMatch) {
+    const app = stateMatch[1];
+    if (!STATE_APPS.has(app)) throw new HttpError(404, "Not found");
+    if (method === "GET") {
+      const row = await env.DB.prepare("SELECT data, updated_at FROM app_state WHERE user_id = ? AND app = ?")
+        .bind(user.id, app).first();
+      return json({ data: row ? JSON.parse(row.data) : null, updatedAt: row ? row.updated_at : null });
+    }
+    if (method === "PUT") {
+      const { data } = await body(request);
+      if (!data || typeof data !== "object" || Array.isArray(data)) throw new HttpError(400, "Data must be an object");
+      const text = JSON.stringify(data);
+      if (text.length > MAX_STATE) throw new HttpError(413, "Too much to save");
+      const now = Date.now();
+      await env.DB.prepare(
+        `INSERT INTO app_state (user_id, app, data, updated_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT (user_id, app) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
+        .bind(user.id, app, text, now).run();
+      return json({ ok: true, updatedAt: now });
+    }
   }
 
   if (path === "/api/drawings" && method === "GET") {

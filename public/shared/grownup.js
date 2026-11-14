@@ -27,7 +27,9 @@
   }
 
   let dialog = null;
-  function ask(url) {
+  // ask({ text, go, done }): text is the line under the title, go and stay
+  // are the button labels, done runs after a right answer.
+  function ask(opts) {
     if (!dialog) {
       css();
       dialog = document.createElement("dialog");
@@ -35,7 +37,7 @@
       dialog.innerHTML = `
         <form method="dialog">
           <h2>Ask a grown-up</h2>
-          <p>This goes to another website: <b class="host"></b></p>
+          <p class="why"></p>
           <label><span class="q"></span> = ?</label>
           <input class="a" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Answer">
           <p class="bad" aria-live="polite"></p>
@@ -48,7 +50,9 @@
     }
     const a = 12 + Math.floor(Math.random() * 30);
     const b = 11 + Math.floor(Math.random() * 30);
-    dialog.querySelector(".host").textContent = url.hostname;
+    dialog.querySelector(".why").textContent = opts.text;
+    dialog.querySelector(".go2").textContent = opts.go || "Go";
+    dialog.querySelector(".stay").textContent = opts.stay || "Stay here";
     dialog.querySelector(".q").textContent = `${a} + ${b}`;
     const input = dialog.querySelector(".a");
     const bad = dialog.querySelector(".bad");
@@ -59,7 +63,7 @@
       if (e.submitter && e.submitter.value === "go") {
         if (Number(input.value) === a + b) {
           dialog.close();
-          location.href = url.href;
+          opts.done();
         } else {
           e.preventDefault();
           bad.textContent = "Not quite. Ask a grown-up to help.";
@@ -76,6 +80,11 @@
     try { url = new URL(link.href, location.href); } catch { return; }
     if (!/^https?:$/.test(url.protocol) || url.origin === location.origin) return;
     e.preventDefault();
-    ask(url);
+    ask({ text: "This goes to another website: " + url.hostname, done: () => { location.href = url.href; } });
   });
+
+  // For grown-up-only parts of an app (adding pocket money, choosing routines):
+  //   window.askGrownUp("Adding pocket money is for grown-ups.").then(() => …)
+  // The promise only settles when the sum is answered correctly.
+  window.askGrownUp = (text, go) => new Promise((resolve) => ask({ text, go: go || "OK", stay: "Cancel", done: resolve }));
 })();

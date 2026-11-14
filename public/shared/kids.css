@@ -224,3 +224,39 @@ svg { display: block; }
 }
 .credits p { margin: 0 0 6px; }
 .credits a { color: var(--ink); }
+
+/* ---------- Sign-in panel (shared/account.js) and small app pieces ---------- */
+
+.signin-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--bg);
+}
+.signin-card {
+  max-width: 420px;
+  padding: 32px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.signin-card h2 { margin: 0 0 8px; font-size: 28px; }
+.signin-note { margin: 0 0 20px; color: var(--muted); font-size: 17px; line-height: 1.4; }
+.signin-google { display: flex; justify-content: center; min-height: 44px; }
+.signin-dev, .pillbtn {
+  min-height: 56px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--soft);
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.signin-dev { margin-top: 12px; }
+.pillbtn.dark { background: var(--ink); color: #fff; }
+.pillbtn:active { transform: translateY(2px); }
