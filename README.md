@@ -48,7 +48,7 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - `public/music/index.html` shows six experiments from Chrome Music Lab as tiles: Melody Maker, Arpeggios, Chords, Piano Roll, Harmonics and Strings. Each lives in `public/music/<name>/` and its Home button goes back to `/music/`. This is the one app where sound is on, and it only starts when the child taps.
 - The upstream repo is archived and built with webpack 1 and node-sass. The fork builds on Node 22 (Dart Sass, pinned loaders) and loads nothing from other sites: piano and harp samples are in `public/music/sound/` (cut from the tonejs-instruments samples with `sound/make-samples.py` in the fork), Tone.js is local, icons are plain characters and there are no web fonts. Piano Roll's microphone button is removed.
 - Sound Spinner and Spectrogram are left out because they use the microphone. Song Maker, Rhythm and Kandinsky aren't in the open-source repo.
-- Rebuild with `scripts/build-music.sh`. Until the fork exists, the changes are in `third_party/music-lab-kids.patch` (without the sound files).
+- Rebuild with `scripts/build-music.sh`. The changes are on the `kids-sauravsood` branch of sauravsood/chrome-music-lab.
 - Built from googlecreativelab/chrome-music-lab `e54bb41` plus one commit.
 
 ## Planetarium (`/sky/`)
