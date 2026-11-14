@@ -1,0 +1,4 @@
+# Planetarium moved from /planetarium/ to /sky/ (2026-11-14).
+/planetarium/sky/* /sky/view/:splat 301
+/planetarium/* /sky/:splat 301
+/planetarium /sky/ 301

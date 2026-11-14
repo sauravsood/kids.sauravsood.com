@@ -12,13 +12,14 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Kids</title>
-  <meta name="description" content="Things to make and explore: tracing, the night sky and dinosaurs in 3D.">
+  <meta name="description" content="Calm, hands-on things to make, explore and figure out.">
   <meta name="theme-color" content="#fff7ec">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Kids">
   <link rel="icon" href="/shared/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/trace/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="/shared/kids.css">
+  <script src="/shared/grownup.js" defer></script>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-K71K5101R8"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -29,17 +30,26 @@
   </script>
 </head>
 <body>
-  <main class="page">
-    <ul id="tiles" class="tiles" aria-label="Things to do"></ul>
+  <main class="page home">
+    <div id="sections"></div>
   </main>
   <script type="module">
-    import { TILES } from "/tiles.js";
-    const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-    document.getElementById("tiles").innerHTML = TILES.map((t) => `
-      <li><a class="tile" href="${esc(t.href)}" style="--tint:${esc(t.tint)}">
-        <div class="art">${t.art}</div>
-        <div class="words"><h2>${esc(t.name)}</h2><p>${esc(t.line)}</p></div>
-      </a></li>`).join("");
+    import { CATEGORIES } from "/tiles.js";
+    const ICONS = { creativity: "🎨", explore: "🔭", puzzles: "🧩", life: "🌱" };
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const tile = (a) => {
+      const inner = `
+        <div class="art">${a.art}${a.soon ? '<span class="soon">Coming soon</span>' : ""}</div>
+        <div class="words"><h3>${esc(a.name)}</h3><p>${esc(a.line)}</p><span class="age">Ages ${esc(a.age)}</span></div>`;
+      return a.soon
+        ? `<li><div class="tile is-soon" style="--tint:${esc(a.tint)}" aria-disabled="true">${inner}</div></li>`
+        : `<li><a class="tile" href="${esc(a.href)}" style="--tint:${esc(a.tint)}">${inner}</a></li>`;
+    };
+    document.getElementById("sections").innerHTML = CATEGORIES.map((c) => `
+      <section class="category" id="${esc(c.id)}" aria-labelledby="h-${esc(c.id)}">
+        <h2 id="h-${esc(c.id)}"><span aria-hidden="true">${ICONS[c.id] || ""}</span> ${esc(c.name)}</h2>
+        <ul class="tiles">${c.apps.map(tile).join("")}</ul>
+      </section>`).join("");
   </script>
 </body>
 </html>

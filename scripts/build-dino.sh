@@ -14,4 +14,6 @@ npm run build
 rm -rf "$OUT" && cp -r dist "$OUT"
 # The official site's crawler files and 404 page don't belong under /dino/museum/.
 rm -f "$OUT/robots.txt" "$OUT/sitemap.xml" "$OUT/404.html"
+# Kids-site additions: a Home button and the grown-up check on outside links.
+find "$OUT" -name '*.html' -exec sed -i 's#</body>#<script src="/shared/museum-home.js" defer></script></body>#' {} +
 echo "Built from $(git rev-parse HEAD). Update the commit in README.md."
