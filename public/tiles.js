@@ -133,9 +133,9 @@ export const CATEGORIES = [
     id: "life",
     name: "Life Skills",
     apps: [
-      { name: "Pocket Money", soon: true, age: "5+", tint: "#e3f2fb", art: ART.money,
+      { name: "Pocket Money", href: "/money/", age: "5+", tint: "#e3f2fb", art: ART.money,
         line: "Fill your Save, Spend and Share jars." },
-      { name: "My Routines", soon: true, age: "3+", tint: "#e8f5e1", art: ART.routines,
+      { name: "My Routines", href: "/routines/", age: "3+", tint: "#e8f5e1", art: ART.routines,
         line: "Tap the pictures as you do your day." },
     ],
   },

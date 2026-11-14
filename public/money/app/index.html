@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Pocket Money</title>
+  <meta name="theme-color" content="#fff7ec">
+  <link rel="icon" href="/shared/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/shared/kids.css">
+  <link rel="stylesheet" href="money.css">
+  <script src="/shared/grownup.js" defer></script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K71K5101R8"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    // Ad signals are off: this site is for kids.
+    gtag('config', 'G-K71K5101R8', { allow_google_signals: false, allow_ad_personalization_signals: false });
+  </script>
+</head>
+<body>
+  <main class="page">
+    <header class="bar">
+      <a class="round" href="/" aria-label="Home">
+        <svg viewBox="0 0 24 24"><path d="M3.5 11.5 L12 4 L20.5 11.5 M6 9.5 V20 H10 V14.5 H14 V20 H18 V9.5"/></svg>
+      </a>
+      <h1 id="title">Pocket Money</h1>
+      <span class="spacer"></span>
+      <button class="pillbtn" id="grownup">Grown-ups</button>
+    </header>
+
+    <section class="tray" id="tray" aria-live="polite">
+      <div class="tray-coins" id="tray-coins"></div>
+      <p id="tray-text"></p>
+    </section>
+
+    <section class="jars" id="jars"></section>
+
+    <section class="goal" id="goal"></section>
+  </main>
+
+  <dialog class="sheet" id="grown-sheet">
+    <form method="dialog">
+      <h2>Grown-ups</h2>
+      <label>Add pocket money (coins)
+        <span class="stepper">
+          <button type="button" data-step="-1" aria-label="Fewer">−</button>
+          <output id="add-n">5</output>
+          <button type="button" data-step="1" aria-label="More">+</button>
+        </span>
+      </label>
+      <button class="pillbtn dark" type="button" id="add-go">Add to the coin tray</button>
+      <hr>
+      <p class="hint">When coins are really spent or given away, take them out here.</p>
+      <div class="row">
+        <button class="pillbtn" type="button" data-out="spend">Spent 1 from Spend</button>
+        <button class="pillbtn" type="button" data-out="share">Gave 1 from Share</button>
+      </div>
+      <button class="pillbtn" type="button" id="goal-bought">We bought the goal</button>
+      <hr>
+      <div class="row end"><button class="pillbtn dark" value="close">Done</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="sheet" id="goal-sheet">
+    <form method="dialog">
+      <h2>What are you saving for?</h2>
+      <div class="picks" id="goal-picks"></div>
+      <label>How many coins does it cost?
+        <span class="stepper">
+          <button type="button" data-gstep="-5" aria-label="Fewer">−</button>
+          <output id="goal-n">20</output>
+          <button type="button" data-gstep="5" aria-label="More">+</button>
+        </span>
+      </label>
+      <div class="row end">
+        <button class="pillbtn" value="cancel">Cancel</button>
+        <button class="pillbtn dark" type="button" id="goal-save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="money.js"></script>
+</body>
+</html>

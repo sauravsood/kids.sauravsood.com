@@ -1,0 +1,115 @@
+/* Pocket Money: a coin tray, three jars and one goal. */
+.spacer { flex: 1; }
+
+.tray {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 96px;
+  padding: 16px 24px;
+  border-radius: var(--radius);
+  background: #e3f2fb;
+}
+.tray p { margin: 0; font-size: 22px; font-weight: 800; }
+.tray-coins { display: flex; flex-wrap: wrap; gap: 6px; max-width: 60%; }
+
+.coin {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #ffd166;
+  border: 3px solid #f2b632;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.08);
+}
+.coin.more { display: grid; place-items: center; background: #fff; border-color: #f1e6d6; font-size: 13px; font-weight: 800; }
+
+.jars {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 640px) { .jars { grid-template-columns: 1fr; } }
+
+.jar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 14px 16px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.jar h2 { margin: 0; font-size: 26px; }
+.jar .what { margin: 0; color: var(--muted); font-size: 16px; text-align: center; }
+.jar .put {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 24px;
+}
+.jar .put:disabled { cursor: default; }
+.jar .put:not(:disabled):active { transform: translateY(3px); }
+.jar svg { width: min(100%, 220px); height: auto; margin: 0 auto; }
+.jar .count { font-size: 40px; font-weight: 800; line-height: 1; }
+.jar .takeout {
+  min-height: 48px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--soft);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.jar .takeout:disabled { opacity: 0.4; cursor: default; }
+.jar.ready .put svg { filter: drop-shadow(0 0 10px rgba(255, 159, 28, 0.55)); }
+
+.goal {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 20px 24px;
+  border-radius: var(--radius);
+  background: #e8f5e1;
+}
+.goal .pic { font-size: 64px; line-height: 1; }
+.goal .words { flex: 1; min-width: 220px; }
+.goal h2 { margin: 0 0 4px; font-size: 24px; }
+.goal p { margin: 0; font-size: 18px; color: var(--ink); }
+.steps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.steps i { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid #cfe2c2; }
+.steps i.on { background: #ffd166; border-color: #f2b632; }
+
+.sheet {
+  border: 0;
+  border-radius: 28px;
+  padding: 28px;
+  width: min(480px, calc(100vw - 32px));
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 10px 40px rgba(58, 63, 75, 0.25);
+  font-family: inherit;
+}
+.sheet::backdrop { background: rgba(58, 63, 75, 0.45); }
+.sheet h2 { margin: 0 0 16px; font-size: 26px; }
+.sheet form { display: flex; flex-direction: column; gap: 14px; }
+.sheet label { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 18px; font-weight: 700; }
+.sheet hr { width: 100%; border: 0; border-top: 2px solid var(--soft); margin: 4px 0; }
+.sheet .hint { margin: 0; color: var(--muted); font-size: 16px; }
+.sheet .row { display: flex; gap: 10px; flex-wrap: wrap; }
+.sheet .row.end { justify-content: flex-end; }
+.stepper { display: inline-flex; align-items: center; gap: 12px; }
+.stepper button { width: 52px; height: 52px; border: 0; border-radius: 50%; background: var(--soft); font-size: 26px; font-weight: 800; cursor: pointer; }
+.stepper output { min-width: 48px; text-align: center; font-size: 28px; font-weight: 800; }
+.picks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.picks button {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 4px; border: 3px solid transparent; border-radius: 20px; background: var(--soft);
+  font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.picks button span { font-size: 36px; line-height: 1; }
+.picks button[aria-pressed="true"] { border-color: var(--accent); background: #fff3df; }
