@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "width": 1200,
+  "height": 630,
+  "cards": {
+    "x-default": {
+      "fileName": "museum.png",
+      "sourceSha256": "70b0fd0e53572c3f5f0d55530a72b9913cb4783f57f29fde16d7bb8c8b03ebee"
+    },
+    "zh-CN": {
+      "fileName": "museum.zh-CN.png",
+      "sourceSha256": "07997d11c5580cff02d76e15e51be08e15ed9c269e96dd1845a399ee6d655b9a"
+    },
+    "en": {
+      "fileName": "museum.en.png",
+      "sourceSha256": "14b391f3ca33acdae9ce75009016fb6a980307f57f1f8ba37cfb6301a9503eb5"
+    }
+  }
+}

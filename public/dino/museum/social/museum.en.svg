@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">Prehistoric Animal Museum, a 3D family adventure by Leon Made This</title>
+  <desc id="description">Meet 45 prehistoric animals in 3D</desc>
+  <defs>
+    
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#eef4df"/><stop offset=".58" stop-color="#d8e7c2"/><stop offset="1" stop-color="#9dc8c5"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#173a35" flood-opacity=".2"/></filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <circle cx="1030" cy="120" r="180" fill="#fff" opacity=".25"/>
+  <circle cx="1040" cy="570" r="270" fill="#487e70" opacity=".13"/>
+  <g fill="#315f53" opacity=".7"><path d="M920 430c65-90 153-100 222-34-52 1-77 24-84 70-42-46-85-57-138-36Z"/><path d="M827 494c53-64 119-63 166-7-40-5-62 11-73 46-28-38-58-51-93-39Z"/></g>
+  <g filter="url(#shadow)">
+    <rect x="72" y="70" width="860" height="490" rx="44" fill="#fff" opacity=".84"/>
+    <text x="125" y="145" fill="#51766b" font-family="ui-rounded, system-ui, sans-serif" font-size="28" font-weight="700">Leon Made This</text>
+    <text fill="#20382f" font-family="ui-rounded, system-ui, sans-serif" font-size="68" font-weight="700"><tspan x="125" y="225">Prehistoric Animal</tspan><tspan x="125" y="301">Museum</tspan></text>
+    <text x="125" y="382" fill="#355b50" font-family="ui-rounded, system-ui, sans-serif" font-size="31" font-weight="600">Meet 45 prehistoric animals in 3D</text>
+    <g transform="translate(125 420)" fill="#d6724d"><circle cx="33" cy="33" r="33"/><circle cx="111" cy="33" r="33"/><circle cx="189" cy="33" r="33"/></g>
+    <text x="125" y="525" fill="#527a6e" font-family="ui-rounded, system-ui, sans-serif" font-size="25">Land · Sky · Sea</text>
+  </g>
+</svg>
