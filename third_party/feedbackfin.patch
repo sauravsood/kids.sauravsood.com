@@ -1,0 +1,564 @@
+From 4f4bb650c92d21cb580192f7a288c48ce3b92113 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 14 Nov 2026 15:09:18 +0000
+Subject: [PATCH] Floating chat bubble, name and email fields, honeypot,
+ beforeOpen hook
+
+- config.bubble adds a fixed chat bubble in any corner; the widget opens next to it
+- Name and email inputs; hidden honeypot field; page URL sent with each submission
+- config.beforeOpen can delay opening (used for a grown-up check on the kids site)
+- Errors from the server are shown in the form instead of an alert; non-2xx counts as failure
+- Escape closes the widget; init works when the script loads after page load
+- Drop the Powered by Rowy link (no outside links on the kids site)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_0151pDBqAnsdGZRRpNdEQAFE
+---
+ src/form-html.ts |   2 +-
+ src/form.css     | 135 +++++++++++++++++++++++++++++++++++--------
+ src/form.html    |  58 ++++++++++++++-----
+ src/index.ts     | 147 ++++++++++++++++++++++++++++++++++++++---------
+ 4 files changed, 276 insertions(+), 66 deletions(-)
+
+diff --git a/src/form-html.ts b/src/form-html.ts
+index 1a9d10d..6d2dd68 100644
+--- a/src/form-html.ts
++++ b/src/form-html.ts
+@@ -1 +1 @@
+-export const formHTML = `<button id="feedbackfin__close" class="feedbackfin__icon-button" type="reset" aria-label="Close"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button><form id="feedbackfin__form"><h1 id="feedbackfin__title">Send feedback</h1><div id="feedbackfin__radio-group" role="radiogroup" aria-label="Feedback type"><input class="feedbackfin__radio" type="radio" id="feedbackfin__radio--issue" name="feedbackType" value="issue" required><label for="feedbackfin__radio--issue" class="feedbackfin__button feedbackfin__radio-label"><span class="feedbackfin__radio-icon">&#x2757;</span>Issue</label><input class="feedbackfin__radio" type="radio" id="feedbackfin__radio--idea" name="feedbackType" value="idea" required><label for="feedbackfin__radio--idea" class="feedbackfin__button feedbackfin__radio-label"><span class="feedbackfin__radio-icon">&#x1F4A1;</span>Idea</label><input class="feedbackfin__radio" type="radio" id="feedbackfin__radio--other" name="feedbackType" value="other" required><label for="feedbackfin__radio--other" class="feedbackfin__button feedbackfin__radio-label"><span class="feedbackfin__radio-icon">&#x1F4AD;</span>Other</label></div><div id="feedbackfin__step2"><textarea id="feedbackfin__message" name="message" type="text" placeholder="I think…" required rows="2" aria-label="Message"></textarea><button id="feedbackfin__submit" class="feedbackfin__button" type="submit">Send</button></div></form><div id="feedbackfin__success"><svg viewBox="0 0 18 18" width="3em" height="3em" role="presentation"><polyline stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="2.705 8.29 7 12.585 15.295 4.29" fill="none" id="feedbackfin__check"/></svg>Thanks for your feedback!</div><div id="feedbackfin__branding"><a href="https://www.rowy.io/feedbackfin" target="_blank" rel="noopener">Powered by Rowy</a></div>`;
++export const formHTML = `<button id="feedbackfin__close" class="feedbackfin__icon-button" type="reset" aria-label="Close"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="feather feather-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button><form id="feedbackfin__form"><h1 id="feedbackfin__title">Send feedback</h1><div id="feedbackfin__radio-group" role="radiogroup" aria-label="Feedback type"><input class="feedbackfin__radio" type="radio" id="feedbackfin__radio--idea" name="feedbackType" value="idea" required><label for="feedbackfin__radio--idea" class="feedbackfin__button feedbackfin__radio-label"><span class="feedbackfin__radio-icon">&#x1F4A1;</span>Idea</label><input class="feedbackfin__radio" type="radio" id="feedbackfin__radio--issue" name="feedbackType" value="issue" required><label for="feedbackfin__radio--issue" class="feedbackfin__button feedbackfin__radio-label"><span class="feedbackfin__radio-icon">&#x2757;</span>Issue</label><input class="feedbackfin__radio" type="radio" id="feedbackfin__radio--other" name="feedbackType" value="other" required><label for="feedbackfin__radio--other" class="feedbackfin__button feedbackfin__radio-label"><span class="feedbackfin__radio-icon">&#x1F4AD;</span>Other</label></div><div id="feedbackfin__step2"><div id="feedbackfin__who"><input id="feedbackfin__name" class="feedbackfin__input" name="name" type="text" maxlength="100" autocomplete="name" placeholder="Name" aria-label="Name"> <input id="feedbackfin__email" class="feedbackfin__input" name="email" type="email" maxlength="200" autocomplete="email" placeholder="Email" aria-label="Email"></div><input id="feedbackfin__website" name="website" type="text" tabindex="-1" autocomplete="off" aria-hidden="true"><textarea id="feedbackfin__message" name="message" type="text" placeholder="I think…" required rows="3" maxlength="4000" aria-label="Message"></textarea><p id="feedbackfin__error" aria-live="polite"></p><p id="feedbackfin__note">Your email is only used to reply to you.</p><button id="feedbackfin__submit" class="feedbackfin__button" type="submit">Send</button></div></form><div id="feedbackfin__success"><svg viewBox="0 0 18 18" width="3em" height="3em" role="presentation"><polyline stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="2.705 8.29 7 12.585 15.295 4.29" fill="none" id="feedbackfin__check"/></svg>Thanks for your feedback!</div>`;
+diff --git a/src/form.css b/src/form.css
+index 9d37dc4..0bdefdb 100644
+--- a/src/form.css
++++ b/src/form.css
+@@ -64,17 +64,20 @@
+   position: fixed;
+   z-index: 9999;
+ 
+-  width: 19rem;
+-  height: 15rem;
++  width: min(20rem, calc(100vw - 2rem));
++  min-height: 15rem;
++  max-height: calc(100vh - 6rem);
++  overflow-y: auto;
+   box-sizing: border-box;
+ 
+   background-color: var(--feedbackfin-bg-color);
+   box-shadow: var(--feedbackfin-shadow);
+   border-radius: var(--feedbackfin-border-radius);
+ 
+-  padding: 0.75rem 1rem;
++  padding: 0.75rem 1rem 1rem;
+ 
+   font-family: inherit;
++  text-align: left;
+   font-size: 1rem;
+   color: hsl(var(--feedbackfin-text-color));
+ }
+@@ -251,6 +254,39 @@
+   left: 0.25rem;
+ }
+ 
++#feedbackfin__who {
++  display: flex;
++  gap: 0.5rem;
++}
++.feedbackfin__input {
++  width: 100%;
++  min-width: 0;
++}
++#feedbackfin__website {
++  position: absolute;
++  left: -10000px;
++  width: 1px;
++  height: 1px;
++  opacity: 0;
++}
++#feedbackfin__error {
++  margin: 0;
++  color: #d6455d;
++  font-size: 0.875rem;
++}
++#feedbackfin__error:empty {
++  display: none;
++}
++#feedbackfin__note {
++  margin: 0;
++  font-size: 0.75rem;
++  opacity: 0.6;
++}
++
++#feedbackfin__message,
++.feedbackfin__input {
++  font-size: 16px;
++}
+ #feedbackfin__message {
+   min-height: 5rem;
+   resize: none;
+@@ -264,6 +300,17 @@
+   color: inherit;
+   padding: 0.5rem;
+ }
++.feedbackfin__input {
++  border-radius: calc(var(--feedbackfin-border-radius) / 2);
++  border: 2px solid
++    hsla(var(--feedbackfin-text-color), var(--feedbackfin-outline-opacity));
++  background: none;
++  font: inherit;
++  font-size: 16px;
++  color: inherit;
++  padding: 0.4rem 0.5rem;
++}
++.feedbackfin__input:focus,
+ #feedbackfin__message:focus {
+   border-color: var(--feedbackfin-focus-color);
+   box-shadow: none;
+@@ -353,29 +400,71 @@
+   display: flex;
+ }
+ 
+-#feedbackfin__branding {
+-  position: absolute;
+-  left: 0;
+-  right: 0;
+-  bottom: 0.5rem;
+ 
+-  font-size: 0.6875em;
+-  text-align: center;
++/* Floating chat bubble (config.bubble) */
++#feedbackfin__bubble {
++  position: fixed;
++  z-index: 9998;
++  bottom: max(1rem, env(safe-area-inset-bottom));
++  right: max(1rem, env(safe-area-inset-right));
++  width: var(--feedbackfin-bubble-size, 3.25rem);
++  height: var(--feedbackfin-bubble-size, 3.25rem);
++  padding: 0;
++  border: none;
++  border-radius: 50%;
++  cursor: pointer;
++  display: grid;
++  place-items: center;
++  font-size: calc(var(--feedbackfin-bubble-size, 3.25rem) * 0.46);
++  background-color: var(--feedbackfin-bubble-bg, var(--feedbackfin-primary-color));
++  color: var(--feedbackfin-bubble-color, var(--feedbackfin-primary-color-text));
++  box-shadow: var(--feedbackfin-shadow);
++  opacity: var(--feedbackfin-bubble-opacity, 1);
++  -webkit-tap-highlight-color: transparent;
++  transition: var(--feedbackfin-button-transition);
++}
++#feedbackfin__bubble:hover,
++#feedbackfin__bubble:focus-visible {
++  opacity: 1;
++  transform: scale(1.05);
++}
++#feedbackfin__bubble:active {
++  transform: scale(0.95);
++}
++#feedbackfin__bubble:focus-visible {
++  outline: none;
++  box-shadow: var(--feedbackfin-focus-shadow);
++}
++#feedbackfin__bubble[data-corner^="top"] {
++  bottom: auto;
++  top: max(1rem, env(safe-area-inset-top));
++}
++#feedbackfin__bubble[data-corner$="left"] {
++  right: auto;
++  left: max(1rem, env(safe-area-inset-left));
++}
++#feedbackfin__bubble svg {
++  display: block;
+ }
+-#feedbackfin__branding a {
+-  border-radius: calc(var(--feedbackfin-border-radius) / 4);
+-
+-  text-decoration: none;
+-  color: inherit;
+ 
+-  opacity: var(--feedbackfin-icon-button-opacity);
+-  transition: var(--feedbackfin-button-transition);
++/* Widget opened from the bubble sits next to it */
++#feedbackfin__container[data-corner] {
++  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + var(--feedbackfin-bubble-size, 3.25rem) + 0.75rem);
++  right: max(1rem, env(safe-area-inset-right));
+ }
+-#feedbackfin__branding a:hover,
+-#feedbackfin__branding a:focus-visible {
+-  opacity: calc(var(--feedbackfin-icon-button-opacity) * 2);
++#feedbackfin__container[data-corner^="top"] {
++  bottom: auto;
++  top: calc(max(1rem, env(safe-area-inset-top)) + var(--feedbackfin-bubble-size, 3.25rem) + 0.75rem);
+ }
+-#feedbackfin__branding a:active {
+-  opacity: calc(var(--feedbackfin-icon-button-opacity) * 0.75);
+-  transition-duration: 0s;
++#feedbackfin__container[data-corner$="left"] {
++  right: auto;
++  left: max(1rem, env(safe-area-inset-left));
++}
++
++@media (prefers-reduced-motion: reduce) {
++  #feedbackfin__bubble,
++  #feedbackfin__container * {
++    transition: none !important;
++    animation: none !important;
++  }
+ }
+diff --git a/src/form.html b/src/form.html
+index 8d27b3e..9ea61e3 100644
+--- a/src/form.html
++++ b/src/form.html
+@@ -31,31 +31,31 @@
+     <input
+       class="feedbackfin__radio"
+       type="radio"
+-      id="feedbackfin__radio--issue"
++      id="feedbackfin__radio--idea"
+       name="feedbackType"
+-      value="issue"
++      value="idea"
+       required
+     />
+     <label
+-      for="feedbackfin__radio--issue"
++      for="feedbackfin__radio--idea"
+       class="feedbackfin__button feedbackfin__radio-label"
+     >
+-      <span class="feedbackfin__radio-icon">&#x2757;</span> Issue
++      <span class="feedbackfin__radio-icon">&#x1F4A1;</span> Idea
+     </label>
+ 
+     <input
+       class="feedbackfin__radio"
+       type="radio"
+-      id="feedbackfin__radio--idea"
++      id="feedbackfin__radio--issue"
+       name="feedbackType"
+-      value="idea"
++      value="issue"
+       required
+     />
+     <label
+-      for="feedbackfin__radio--idea"
++      for="feedbackfin__radio--issue"
+       class="feedbackfin__button feedbackfin__radio-label"
+     >
+-      <span class="feedbackfin__radio-icon">&#x1F4A1;</span> Idea
++      <span class="feedbackfin__radio-icon">&#x2757;</span> Issue
+     </label>
+ 
+     <input
+@@ -75,16 +75,50 @@
+   </div>
+ 
+   <div id="feedbackfin__step2">
++    <div id="feedbackfin__who">
++      <input
++        id="feedbackfin__name"
++        class="feedbackfin__input"
++        name="name"
++        type="text"
++        maxlength="100"
++        autocomplete="name"
++        placeholder="Name"
++        aria-label="Name"
++      />
++      <input
++        id="feedbackfin__email"
++        class="feedbackfin__input"
++        name="email"
++        type="email"
++        maxlength="200"
++        autocomplete="email"
++        placeholder="Email"
++        aria-label="Email"
++      />
++    </div>
++    <input
++      id="feedbackfin__website"
++      name="website"
++      type="text"
++      tabindex="-1"
++      autocomplete="off"
++      aria-hidden="true"
++    />
+     <textarea
+       id="feedbackfin__message"
+       name="message"
+       type="text"
+       placeholder="I think…"
+       required
+-      rows="2"
++      rows="3"
++      maxlength="4000"
+       aria-label="Message"
+     ></textarea>
+ 
++    <p id="feedbackfin__error" aria-live="polite"></p>
++    <p id="feedbackfin__note">Your email is only used to reply to you.</p>
++
+     <button id="feedbackfin__submit" class="feedbackfin__button" type="submit">
+       Send
+     </button>
+@@ -105,9 +139,3 @@
+ 
+   Thanks for your feedback!
+ </div>
+-
+-<div id="feedbackfin__branding">
+-  <a href="https://www.rowy.io/feedbackfin" target="_blank" rel="noopener">
+-    Powered by Rowy
+-  </a>
+-</div>
+diff --git a/src/index.ts b/src/index.ts
+index 1476ac3..fb3dbf9 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1,23 +1,43 @@
+-import { computePosition, flip, shift } from "@floating-ui/dom";
++import { computePosition, flip, shift, offset } from "@floating-ui/dom";
+ import { createFocusTrap } from "focus-trap";
+ 
+ import { formHTML } from "./form-html";
+ import formCSS from "./form.css";
+ 
+ export type FeedbackFinConfig = {
++  /** Where the feedback is POSTed as JSON. */
+   url: string;
++  /** Extra fields sent with every submission. */
+   user: Record<any, any>;
+   disableErrorAlert: boolean;
++  /**
++   * Show a floating chat bubble that opens the widget. `true` puts it in the
++   * bottom-right corner; a string picks the corner ("bottom-left" etc).
++   */
++  bubble: boolean | string;
++  /** Accessible label and tooltip for the bubble. */
++  bubbleLabel: string;
++  /**
++   * Runs before the widget opens. Return a promise to delay opening (e.g. a
++   * grown-up check); the widget only opens once it resolves.
++   */
++  beforeOpen?: () => void | Promise<unknown>;
+ };
+ const config: FeedbackFinConfig = {
+   url: "",
+   user: {},
+   disableErrorAlert: false,
++  bubble: false,
++  bubbleLabel: "Send feedback",
+   // Spread user config when loaded
+   ...(window as any).feedbackfin?.config,
+ };
+ 
++let initialised = false;
+ function init() {
++  if (initialised) return;
++  initialised = true;
++
+   const styleElement = document.createElement("style");
+   styleElement.id = "feedbackfin__css";
+   styleElement.innerHTML = formCSS;
+@@ -27,33 +47,79 @@ function init() {
+   document.querySelectorAll("[data-feedbackfin-button]").forEach((el) => {
+     el.addEventListener("click", open);
+   });
++
++  if (config.bubble) addBubble();
++}
++// Also works when the script is added after the page has loaded.
++if (document.readyState === "complete") init();
++else window.addEventListener("load", init);
++
++function addBubble() {
++  const corner =
++    typeof config.bubble === "string" ? config.bubble : "bottom-right";
++  const bubble = document.createElement("button");
++  bubble.id = "feedbackfin__bubble";
++  bubble.type = "button";
++  bubble.setAttribute("data-corner", corner);
++  bubble.setAttribute("aria-label", config.bubbleLabel);
++  bubble.title = config.bubbleLabel;
++  bubble.innerHTML =
++    '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
++  bubble.addEventListener("click", (e) => {
++    if (containerElement.isConnected) close();
++    else open(e);
++  });
++  document.body.appendChild(bubble);
+ }
+-window.addEventListener("load", init);
+ 
+ const containerElement = document.createElement("div");
+ containerElement.id = "feedbackfin__container";
++containerElement.setAttribute("role", "dialog");
++containerElement.setAttribute("aria-label", "Send feedback");
+ 
++let closing = false;
+ const trap = createFocusTrap(containerElement, {
+-  initialFocus: "#feedbackfin__radio--issue",
++  initialFocus: "#feedbackfin__radio--idea",
+   allowOutsideClick: true,
++  escapeDeactivates: true,
++  // Escape closes the widget too.
++  onDeactivate: () => {
++    if (!closing && containerElement.isConnected) close();
++  },
+ });
+ 
+-function open(e: Event) {
++async function open(e?: Event) {
++  const target = ((e?.currentTarget || e?.target) as HTMLElement) || null;
++  if (config.beforeOpen) {
++    try {
++      await config.beforeOpen();
++    } catch {
++      return;
++    }
++  }
++  if (containerElement.isConnected) return;
++
+   document.body.appendChild(containerElement);
+   containerElement.innerHTML = formHTML;
+   containerElement.style.display = "block";
+ 
+-  const target = (e?.target as HTMLElement) || document.body;
+-  computePosition(target, containerElement, {
+-    placement: "bottom",
+-    middleware: [flip(), shift({ crossAxis: true, padding: 8 })],
+-    strategy: "fixed",
+-  }).then(({ x, y }) => {
+-    Object.assign(containerElement.style, {
+-      left: `${x}px`,
+-      top: `${y}px`,
++  if (target && target.id === "feedbackfin__bubble") {
++    containerElement.setAttribute(
++      "data-corner",
++      target.getAttribute("data-corner") || "bottom-right"
++    );
++  } else if (target) {
++    computePosition(target, containerElement, {
++      placement: "bottom",
++      middleware: [offset(8), flip(), shift({ crossAxis: true, padding: 8 })],
++      strategy: "fixed",
++    }).then(({ x, y }) => {
++      Object.assign(containerElement.style, {
++        left: `${x}px`,
++        top: `${y}px`,
++      });
+     });
+-  });
++  }
+ 
+   trap.activate();
+ 
+@@ -73,13 +139,17 @@ function open(e: Event) {
+ }
+ 
+ function close() {
++  closing = true;
+   trap.deactivate();
++  closing = false;
+ 
+   containerElement.innerHTML = "";
+ 
+   containerElement.remove();
+   containerElement.removeAttribute("data-feedback-type");
+   containerElement.removeAttribute("data-success");
++  containerElement.removeAttribute("data-corner");
++  containerElement.removeAttribute("style");
+ }
+ 
+ function changeType(e: Event) {
+@@ -88,51 +158,74 @@ function changeType(e: Event) {
+   containerElement.setAttribute("data-feedback-type", value);
+ 
+   let placeholder = "I think…";
+-  if (value === "issue") placeholder = "I’m having an issue with…";
+-  else if (value === "idea") placeholder = "I’d like to see…";
++  if (value === "issue") placeholder = "Something isn’t working: …";
++  else if (value === "idea") placeholder = "It would be great if…";
+ 
+   document
+     .getElementById("feedbackfin__message")
+     ?.setAttribute("placeholder", placeholder);
+ }
+ 
++function fail(message: string) {
++  const submitElement = document.getElementById("feedbackfin__submit");
++  if (submitElement) {
++    submitElement.removeAttribute("disabled");
++    submitElement.innerHTML = "Send";
++  }
++  const errorElement = document.getElementById("feedbackfin__error");
++  if (errorElement) errorElement.textContent = message;
++  else if (!config.disableErrorAlert)
++    alert(`Could not send feedback: ${message}`);
++}
++
+ function submit(e: Event) {
+   e.preventDefault();
+   const target = e.target as HTMLFormElement;
++  const fields = target.elements as any;
+ 
+   if (!config.url) {
+     console.error("Feedback Fin: No URL provided");
+-    if (!config.disableErrorAlert)
+-      alert("Could not send feedback: No URL provided");
++    fail("No URL provided");
+     return;
+   }
+ 
+   const submitElement = document.getElementById("feedbackfin__submit")!;
+   submitElement.setAttribute("disabled", "");
+   submitElement.innerHTML = "Sending…";
+-
+-  const myHeaders = new Headers();
+-  myHeaders.append("Content-Type", "application/json");
++  const errorElement = document.getElementById("feedbackfin__error");
++  if (errorElement) errorElement.textContent = "";
+ 
+   const data = {
+     ...config.user,
+-    feedbackType: (target.elements as any).feedbackType.value,
+-    message: (target.elements as any).message.value,
++    feedbackType: fields.feedbackType.value,
++    name: fields.name ? fields.name.value.trim() : undefined,
++    email: fields.email ? fields.email.value.trim() : undefined,
++    message: fields.message.value,
++    // Honeypot: people never see this field, so anything in it is a bot.
++    website: fields.website ? fields.website.value : undefined,
++    page: location.href,
+     timestamp: Date.now(),
+   };
+ 
+   fetch(config.url, {
+     method: "POST",
+-    headers: myHeaders,
++    headers: { "Content-Type": "application/json" },
+     body: JSON.stringify(data),
+   })
+-    .then(() => {
++    .then(async (res) => {
++      if (!res.ok) {
++        let why = `HTTP ${res.status}`;
++        try {
++          const body = await res.json();
++          if (body && body.error) why = body.error;
++        } catch {}
++        throw new Error(why);
++      }
+       containerElement.setAttribute("data-success", "");
+     })
+     .catch((e) => {
+       console.error("Feedback Fin:", e);
+-      if (!config.disableErrorAlert)
+-        alert(`Could not send feedback: ${e.message}`);
++      fail(e.message === "Failed to fetch" ? "Couldn’t connect. Please try again." : e.message);
+     });
+ 
+   return false;
+-- 
+2.43.0
+

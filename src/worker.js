@@ -1,8 +1,11 @@
 // API for the kids site: Google sign-in and sessions (shared by every app),
 // Trace's saved drawings and usage stats, and one saved JSON document per
-// app for Pocket Money and My Routines.
+// app for Pocket Money and My Routines. Also the site-wide feedback bubble
+// (src/feedback.js).
 // Static files in public/ are served by Cloudflare's asset handler; only
 // /api/* requests reach this Worker (see run_worker_first in wrangler.jsonc).
+
+import { FEEDBACK_SCHEMA, handleFeedback } from "./feedback.js";
 
 const SESSION_COOKIE = "trace_session";
 const SESSION_DAYS = 180;
@@ -45,6 +48,7 @@ const SCHEMA = [
      data TEXT NOT NULL,
      updated_at INTEGER NOT NULL,
      PRIMARY KEY (user_id, app))`,
+  ...FEEDBACK_SCHEMA,
 ];
 
 let schemaReady = null;
@@ -54,9 +58,21 @@ function ensureSchema(db) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
+    if (url.pathname === "/api/feedback") {
+      try {
+        return await handleFeedback(request, env, ctx, ensureSchema);
+      } catch (err) {
+        console.error(err);
+        const origin = request.headers.get("Origin") || "";
+        return new Response(JSON.stringify({ error: "Something went wrong" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...(/^https:\/\/([a-z0-9-]+\.)*sauravsood\.com$/.test(origin) ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}) },
+        });
+      }
+    }
     try {
       if (!env.DB) return json({ error: "Database is not connected" }, 503);
       await ensureSchema(env.DB);

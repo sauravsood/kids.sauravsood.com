@@ -126,3 +126,15 @@ Deployed by Cloudflare Workers Builds from `main` with `npx wrangler deploy`. `w
 - **Google sign-in:** a Google OAuth *Web application* client with `https://kids.sauravsood.com` as an authorised JavaScript origin. Its client ID goes in `GOOGLE_CLIENT_ID` in `wrangler.jsonc`. Trace moving to `/trace/` doesn't change the origin, so nothing changes here.
 - Sessions are random tokens in an HttpOnly cookie (`Path=/`), stored hashed in D1.
 - **Analytics:** every page carries GA4 `G-K71K5101R8` with Google signals and ad personalisation off. Trace sends its own `page_view` per screen with readable paths (`/trace/history`, `/trace/draw/<animal>`, `/trace/drawing/view` with no drawing ids), so GA4's "page changes based on browser history events" setting should stay off.
+
+## Feedback bubble (all of sauravsood.com)
+
+A small chat bubble on every page of sauravsood.com and its subdomains takes an Idea / Issue / Other, a name, an email and a comment. This Worker hosts it for all of them.
+
+- **Add it to any page** on any `*.sauravsood.com` site with one line before `</body>`:
+  `<script src="https://kids.sauravsood.com/feedback/bubble.js" defer></script>`.
+  Options go on that tag: `data-corner` (`bottom-right` default, `bottom-left`, `top-right`, `top-left`), `data-color` and `data-ink` (bubble and icon colours), `data-accent` (Send button), `data-size`, `data-opacity`, and `data-grownup` (ask the grown-up sum first).
+- **Kids site:** `public/shared/grownup.js` adds the bubble itself, small and pale, on the hub and each app's front page, behind the grown-up sum. It stays off the full-screen apps (`/…/app/`, `/sky/view/`, `/dino/museum/`).
+- **Widget:** our fork of [Feedback Fin](https://github.com/rowyio/feedbackfin) (Apache-2.0), built to `public/feedback/feedbackfin.js`. The changes (floating bubble, name and email fields, honeypot, `beforeOpen` hook, inline errors, no outside links) are in `third_party/feedbackfin.patch`, on top of rowyio/feedbackfin `f6eea5a`. To rebuild: apply the patch, `npm install --ignore-scripts`, `node generate-form-html.js`, `npx microbundle --define process.env.NODE_ENV=production`, then copy `dist/index.umd.js` here.
+- **API:** `POST /api/feedback` (`src/feedback.js`). It only takes requests from `https://*.sauravsood.com`, drops bots that fill the hidden field, and allows 5 submissions per visitor per hour (visitors are a daily hash of the IP, not the IP itself). Every submission is saved in the D1 table `feedback`.
+- **Getting it to Claude:** with the Worker secret `FEEDBACK_GITHUB_TOKEN` set, each submission is also filed as an issue in the **private** repo in `FEEDBACK_GITHUB_REPO` (`sauravsood/site-feedback`). A scheduled task in the Claude project reads new issues and asks for accept or reject. That repo must stay private because issues include emails.
