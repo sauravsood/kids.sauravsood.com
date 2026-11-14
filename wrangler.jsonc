@@ -35,6 +35,9 @@
   },
   "vars": {
     // OAuth "Web application" client from Google Cloud Console. Not a secret.
-    "GOOGLE_CLIENT_ID": "250113524401-7vmhm9ffv7nb73aa8i0v070mj3n6jspi.apps.googleusercontent.com"
+    "GOOGLE_CLIENT_ID": "250113524401-7vmhm9ffv7nb73aa8i0v070mj3n6jspi.apps.googleusercontent.com",
+    // Feedback bubble: PRIVATE repo that new feedback is filed in as issues.
+    // Only used once the secret FEEDBACK_GITHUB_TOKEN is set on the Worker.
+    "FEEDBACK_GITHUB_REPO": "sauravsood/site-feedback"
   }
 }

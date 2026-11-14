@@ -87,4 +87,15 @@
   //   window.askGrownUp("Adding pocket money is for grown-ups.").then(() => …)
   // The promise only settles when the sum is answered correctly.
   window.askGrownUp = (text, go) => new Promise((resolve) => ask({ text, go: go || "OK", stay: "Cancel", done: resolve }));
+
+  // Feedback bubble (public/feedback/bubble.js): small and quiet here, it
+  // asks the grown-up sum before the form opens, and it stays off the
+  // full-screen apps themselves (only the hub and each app's front page).
+  const inApp = /\/app\/|^\/sky\/view\/|^\/dino\/museum\//.test(location.pathname);
+  if (!inApp && window.top === window && !document.querySelector('script[src*="/feedback/bubble.js"]')) {
+    const fb = document.createElement("script");
+    fb.src = "/feedback/bubble.js";
+    Object.assign(fb.dataset, { grownup: "", size: "44px", color: "#ffffff", ink: "#3a3f4b", accent: "#3a3f4b", opacity: "0.8" });
+    document.head.appendChild(fb);
+  }
 })();
