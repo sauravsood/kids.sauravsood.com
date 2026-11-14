@@ -7,7 +7,7 @@ A home page of calm, hands-on things for kids, built for iPad first. Apps are gr
 | Creativity | Trace | `/trace/` | Live |
 | | Drawings Come Alive | `/alive` | Coming soon |
 | | Pixel Art | `/pixel/` | Live |
-| | Music Lab | `/music` | Coming soon |
+| | Music Lab | `/music/` | Live |
 | Explore | Planetarium | `/sky/` | Live (was `/planetarium/`, which redirects) |
 | | 3D Dino | `/dino/` | Live |
 | | Sand Lab | `/sand/` | Live |
@@ -20,7 +20,7 @@ Everything is plain HTML, CSS and JavaScript in `public/`, with no build step fo
 
 ## Calm by design
 
-- No countdown timers, streaks that break, leaderboards, loot, ads or autoplay. Sound is off by default (Music Lab will be the exception).
+- No countdown timers, streaks that break, leaderboards, loot, ads or autoplay. Sound is off by default (Music Lab is the exception).
 - Every app has a Home button back to `/`, and a natural stopping point.
 - **Links that leave the site need a grown-up.** `public/shared/grownup.js` catches taps on links to other sites and asks a two-digit sum first. Add it to any page with `<script src="/shared/grownup.js" defer></script>`.
 - Nothing a child makes is shared publicly.
@@ -42,6 +42,14 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - Animal outlines are original drawings in `public/trace/animals.js` (1000 × 1000 viewBox).
 - Add it to the iPad home screen for full-screen use. The manifest's `start_url` and `scope` are `/trace/`, so anyone who added Trace before it moved needs to add it again.
 - Old links from when Trace lived at `/` (for example `/#history` or `/#d/12`) are sent on to `/trace/#…` by a small script at the top of the hub page, because hashes never reach the server.
+
+## Music Lab (`/music/`)
+
+- `public/music/index.html` shows six experiments from Chrome Music Lab as tiles: Melody Maker, Arpeggios, Chords, Piano Roll, Harmonics and Strings. Each lives in `public/music/<name>/` and its Home button goes back to `/music/`. This is the one app where sound is on, and it only starts when the child taps.
+- The upstream repo is archived and built with webpack 1 and node-sass. The fork builds on Node 22 (Dart Sass, pinned loaders) and loads nothing from other sites: piano and harp samples are in `public/music/sound/` (cut from the tonejs-instruments samples with `sound/make-samples.py` in the fork), Tone.js is local, icons are plain characters and there are no web fonts. Piano Roll's microphone button is removed.
+- Sound Spinner and Spectrogram are left out because they use the microphone. Song Maker, Rhythm and Kandinsky aren't in the open-source repo.
+- Rebuild with `scripts/build-music.sh`. Until the fork exists, the changes are in `third_party/music-lab-kids.patch` (without the sound files).
+- Built from googlecreativelab/chrome-music-lab `e54bb41` plus one commit.
 
 ## Planetarium (`/sky/`)
 
@@ -83,6 +91,7 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - **Stellarium Web Engine** is AGPL-3.0 (© Stellarium Labs SRL and contributors). The Planetarium page credits it, ships the licence text, and links to the source of the copy that runs here.
 - **Prehistoric Animal Museum** code is AGPL-3.0-only; its writing, narration and exhibit backgrounds are CC BY-NC-SA 4.0 (non-commercial: fine for this ad-free site, but this part can't be used commercially); each 3D model keeps its own CC BY 4.0 licence; its name and logo are reserved by its brand policy. The museum's `LICENSE`, `LICENSES/` and `THIRD_PARTY_NOTICES.md` ship inside `public/dino/museum/`, and the 3D Dino page credits the original and links to the source.
 - **The Evolution of Trust** is CC0 (public domain), music by Komiku (CC0); its sound effects are CC0, CC Sampling+ and CC BY-NC (fine for this ad-free site).
+- **Chrome Music Lab** is Apache-2.0 and Tone.js is MIT; the piano and harp samples come from tonejs-instruments (MIT package; its samples are credited there as CC BY 3.0).
 - **Piskel** is Apache-2.0. **Sandspiel** is MIT. Each ships its `LICENSE` in its `app/` folder and is credited on its landing page.
 - The AGPL asks that people using a modified copy over the web can get its source. Each project page links to the source of the copy running here and to this repo.
 
