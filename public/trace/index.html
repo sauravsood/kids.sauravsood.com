@@ -16,24 +16,17 @@
   <link rel="stylesheet" href="style.css">
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-K71K5101R8"></script>
   <script>
-    // Trace routes by #hash, so page views are sent by hand: one on load and
-    // one per hash change. Keep GA4's "page changes based on browser history
-    // events" switched off so these aren't counted twice.
+    // Page views are sent from app.js on every route change (one per #hash
+    // screen), so the automatic one is off. Keep GA4's "page changes based on
+    // browser history events" off too. Ad signals are off: this is for kids.
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', 'G-K71K5101R8', { send_page_view: false });
-    (function () {
-      function view() {
-        gtag('event', 'page_view', {
-          page_location: location.href,
-          page_path: location.pathname + location.hash,
-          page_title: document.title,
-        });
-      }
-      view();
-      addEventListener('hashchange', view);
-    })();
+    gtag('config', 'G-K71K5101R8', {
+      send_page_view: false,
+      allow_google_signals: false,
+      allow_ad_personalization_signals: false
+    });
   </script>
 </head>
 <body>

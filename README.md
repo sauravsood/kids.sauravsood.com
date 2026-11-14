@@ -59,4 +59,4 @@ Deployed by Cloudflare Workers Builds from `main` with `npx wrangler deploy`. `w
 - **Database:** Cloudflare D1 (`kids`), bound as `DB`. The Worker creates its tables on first use.
 - **Google sign-in:** a Google OAuth *Web application* client with `https://kids.sauravsood.com` as an authorised JavaScript origin. Its client ID goes in `GOOGLE_CLIENT_ID` in `wrangler.jsonc`. Trace moving to `/trace/` doesn't change the origin, so nothing changes here.
 - Sessions are random tokens in an HttpOnly cookie (`Path=/`), stored hashed in D1.
-- **Analytics:** every page carries GA4 `G-K71K5101R8`. Trace sends a manual `page_view` for each hash route, so GA4's "page changes based on browser history events" setting should stay off.
+- **Analytics:** every page carries GA4 `G-K71K5101R8` with Google signals and ad personalisation off. Trace sends its own `page_view` per screen with readable paths (`/trace/history`, `/trace/draw/<animal>`, `/trace/drawing/view` with no drawing ids), so GA4's "page changes based on browser history events" setting should stay off.

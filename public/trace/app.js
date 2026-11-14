@@ -282,9 +282,40 @@ function showCategory(category) {
   show("category");
 }
 
+// ---------- Analytics ----------
+
+// Trace is one page with #hash routes, so each route is sent to Google
+// Analytics as its own page view with a readable path under /trace. Drawing
+// ids are left out so every saved drawing doesn't become its own page.
+let lastPageView = null;
+function trackPage(path, title) {
+  if (path === lastPageView || typeof gtag !== "function") return;
+  lastPageView = path;
+  gtag("event", "page_view", {
+    page_location: location.origin + path,
+    page_path: path,
+    page_title: title ? `Trace: ${title}` : "Trace",
+  });
+}
+
+function pageFor(hash) {
+  if (!state.me) return ["/trace/signin", "Sign in"];
+  if (!state.me.kidName) return ["/trace/name", "Name"];
+  if (hash === "history") return ["/trace/history", "History"];
+  const group = hash.match(/^c\/(\w+)$/);
+  const category = group && CATEGORIES.find((c) => c.id === group[1]);
+  if (category) return [`/trace/group/${category.id}`, category.name || category.id];
+  const existing = hash.match(/^([de])\/\d+$/);
+  if (existing) return existing[1] === "d" ? ["/trace/drawing/view", "View drawing"] : ["/trace/drawing/edit", "Drawing"];
+  const animal = ANIMALS.find((a) => a.id === hash);
+  if (animal) return [`/trace/draw/${animal.id}`, animal.name || animal.id];
+  return ["/trace/", "Animals"];
+}
+
 async function route() {
   await saveNow();
   state.animal = null;
+  trackPage(...pageFor(location.hash.slice(1)));
 
   if (!state.me) return showSignin();
   if (!state.me.kidName) {
