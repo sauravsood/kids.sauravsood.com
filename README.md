@@ -12,7 +12,7 @@ A home page of calm, hands-on things for kids, built for iPad first. Apps are gr
 | | 3D Dino | `/dino/` | Live |
 | | Sand Lab | `/sand/` | Live |
 | Puzzles & Thinking | Trust Game | `/trust/` | Live (ages 10+) |
-| | Chess | `/chess` | Coming soon |
+| | Chess | `/chess/` | Live |
 | Life Skills | Pocket Money | `/money/` | Live |
 | | My Routines | `/routines/` | Live |
 
@@ -86,6 +86,13 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - The fork keeps only the local sandbox and the element guide. Uploading, browsing, likes, sign-in (Firebase), Sentry, ads, analytics, the service worker and the leave-page prompt are taken out, so nothing made in it leaves the device. Buttons are bigger, and the router keeps the address at `/sand/app/`.
 - Built from MaxBittker/sandspiel `9936e06` plus three commits.
 
+## Chess (`/chess/`)
+
+- `public/chess/app/` is our own page (`chess-app.js`) on two vendored libraries in `vendor/`: chessground 9.2.1 (Lichess's board, GPL-3.0-or-later, with the cburnett pieces) and chess.js 1.4.0 (rules, BSD-2-Clause). We don't host Lichess itself.
+- **Learn** shows one piece and three pawns to collect, so the child sees how it moves. **Play** is a game against the iPad with no clock, no rating and no account; pawns always promote to queens and moves can be taken back.
+- The iPad's player is a small one of our own in `chess-app.js`, not Stockfish, because even Stockfish's lowest level is too strong for a beginner. Gentle mostly plays any move, Easy looks one move ahead and often forgets, Tricky looks two moves ahead.
+- Because chessground is GPL, the chess app as a whole is GPL-3.0-or-later.
+
 ## Pocket Money (`/money/`) and My Routines (`/routines/`)
 
 - Both are our own small apps in `public/<slug>/app/` (plain HTML, CSS and one ES module each). They are inspired by Actual and Loop Habit Tracker but use none of their code.
@@ -100,6 +107,7 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - **Prehistoric Animal Museum** code is AGPL-3.0-only; its writing, narration and exhibit backgrounds are CC BY-NC-SA 4.0 (non-commercial: fine for this ad-free site, but this part can't be used commercially); each 3D model keeps its own CC BY 4.0 licence; its name and logo are reserved by its brand policy. The museum's `LICENSE`, `LICENSES/` and `THIRD_PARTY_NOTICES.md` ship inside `public/dino/museum/`, and the 3D Dino page credits the original and links to the source.
 - **The Evolution of Trust** is CC0 (public domain), music by Komiku (CC0); its sound effects are CC0, CC Sampling+ and CC BY-NC (fine for this ad-free site).
 - **Chrome Music Lab** is Apache-2.0 and Tone.js is MIT; the piano and harp samples come from tonejs-instruments (MIT package; its samples are credited there as CC BY 3.0).
+- **chessground** is GPL-3.0-or-later and **chess.js** is BSD-2-Clause; both licence files ship in `public/chess/app/vendor/`, and the chess app built on them is GPL-3.0-or-later.
 - **Piskel** is Apache-2.0. **Sandspiel** is MIT. Each ships its `LICENSE` in its `app/` folder and is credited on its landing page.
 - The AGPL asks that people using a modified copy over the web can get its source. Each project page links to the source of the copy running here and to this repo.
 

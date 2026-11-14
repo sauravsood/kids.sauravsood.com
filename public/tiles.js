@@ -125,7 +125,7 @@ export const CATEGORIES = [
     apps: [
       { name: "Trust Game", href: "/trust/", age: "10+", tint: "#e3f4ec", art: ART.trust,
         line: "A story game about why people trust each other." },
-      { name: "Chess", soon: true, age: "6+", tint: "#f1e6d6", art: ART.chess,
+      { name: "Chess", href: "/chess/", age: "6+", tint: "#f1e6d6", art: ART.chess,
         line: "Learn how the pieces move and play a gentle game." },
     ],
   },

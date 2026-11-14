@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Chess</title>
+  <meta name="description" content="Learn how the pieces move and play a gentle game.">
+  <meta name="theme-color" content="#fff7ec">
+  <link rel="icon" href="/shared/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/shared/kids.css">
+  <script src="/shared/grownup.js" defer></script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K71K5101R8"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    // Ad signals are off: this site is for kids.
+    gtag('config', 'G-K71K5101R8', { allow_google_signals: false, allow_ad_personalization_signals: false });
+  </script>
+  <style>
+    .hero { --tint: #f1e6d6;  }
+    .go { background: #6b4f2a; color: #fff; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="bar">
+      <a class="round" href="/" aria-label="Home">
+        <svg viewBox="0 0 24 24"><path d="M3.5 11.5 L12 4 L20.5 11.5 M6 9.5 V20 H10 V14.5 H14 V20 H18 V9.5"/></svg>
+      </a>
+      <h1>Chess</h1>
+    </header>
+
+    <section class="hero">
+      <div>
+        <span class="age">Ages 6+</span>
+        <h2>Learn the pieces, then play a gentle game</h2>
+        <p>See how each piece moves by collecting pawns with it. When you're ready, play a slow game against the iPad. There's no clock and no score.</p>
+        <a class="go" href="app/">
+          <svg viewBox="0 0 24 24"><path d="M5 12 H19 M13 6 L19 12 L13 18"/></svg>
+          Start
+        </a>
+      </div>
+      <div class="art">
+        <svg viewBox="0 0 200 160" style="width:100%;max-width:380px;height:auto;margin:0 auto" aria-hidden="true">
+    <g fill="#e6d8c4"><rect x="30" y="110" width="28" height="28"/><rect x="86" y="110" width="28" height="28"/><rect x="142" y="110" width="28" height="28"/></g>
+    <g fill="#b98f5e"><rect x="58" y="110" width="28" height="28"/><rect x="114" y="110" width="28" height="28"/></g>
+    <path d="M84 104 h32 l-4 -10 h-24 z M92 94 c-2 -14 4 -24 6 -30 c-10 -2 -14 -12 -8 -20 c6 -8 20 -6 26 2 c6 10 4 30 -2 48 z" fill="#3a3f4b"/>
+    <circle cx="101" cy="48" r="2.5" fill="#fff"/>
+  </svg>
+      </div>
+    </section>
+
+    <section class="look">
+      <h3>How it works</h3>
+      <ul>
+        <li><span><b>Learn</b>Pick a piece and tap it. The dots show where it can go.</span></li>
+        <li><span><b>Play</b>You are white. Tap a piece, then tap a dot. Take back a move any time.</span></li>
+        <li><span><b>Gentle, Easy, Tricky</b>Start on Gentle. The iPad makes plenty of mistakes there.</span></li>
+      </ul>
+    </section>
+
+    <footer class="credits">
+      <p>The board is <a href="https://github.com/lichess-org/chessground">chessground</a> from Lichess (<a href="app/vendor/chessground/LICENSE">GPL-3.0-or-later</a>), with the cburnett pieces by Colin M.L. Burnett. The rules come from <a href="https://github.com/jhlywa/chess.js">chess.js</a> by Jeff Hlywa (<a href="app/vendor/chess.js/LICENSE">BSD 2-Clause</a>). The iPad's player is our own small one.</p>
+      <p>Because chessground is GPL, this chess app is GPL-3.0-or-later too. Its source is in <a href="https://github.com/sauravsood/kids.sauravsood.com/tree/main/public/chess">sauravsood/kids.sauravsood.com</a>.</p>
+    </footer>
+  </main>
+</body>
+</html>

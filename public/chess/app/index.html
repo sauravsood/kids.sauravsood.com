@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Chess</title>
+  <meta name="theme-color" content="#fff7ec">
+  <link rel="icon" href="/shared/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/shared/kids.css">
+  <link rel="stylesheet" href="vendor/chessground/chessground.base.css">
+  <link rel="stylesheet" href="vendor/chessground/chessground.brown.css">
+  <link rel="stylesheet" href="vendor/chessground/chessground.cburnett.css">
+  <link rel="stylesheet" href="chess.css">
+  <script src="/shared/grownup.js" defer></script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K71K5101R8"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    // Ad signals are off: this site is for kids.
+    gtag('config', 'G-K71K5101R8', { allow_google_signals: false, allow_ad_personalization_signals: false });
+  </script>
+</head>
+<body>
+  <main class="page">
+    <header class="bar">
+      <a class="round" href="/" aria-label="Home">
+        <svg viewBox="0 0 24 24"><path d="M3.5 11.5 L12 4 L20.5 11.5 M6 9.5 V20 H10 V14.5 H14 V20 H18 V9.5"/></svg>
+      </a>
+      <h1>Chess</h1>
+      <span class="spacer"></span>
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tab-learn" aria-selected="true">Learn</button>
+        <button role="tab" id="tab-play" aria-selected="false">Play</button>
+      </div>
+    </header>
+
+    <div class="table">
+      <div class="boardbox"><div id="board" class="cg-wrap"></div></div>
+
+      <aside class="side" id="side-learn">
+        <div class="pieces" id="pieces"></div>
+        <p class="say" id="learn-say" aria-live="polite"></p>
+        <button class="pillbtn" id="learn-again">Again</button>
+      </aside>
+
+      <aside class="side" id="side-play" hidden>
+        <p class="say" id="play-say" aria-live="polite"></p>
+        <div class="levels" id="levels" role="group" aria-label="How hard">
+          <button data-level="0" aria-pressed="true">Gentle</button>
+          <button data-level="1" aria-pressed="false">Easy</button>
+          <button data-level="2" aria-pressed="false">Tricky</button>
+        </div>
+        <div class="row">
+          <button class="pillbtn" id="undo">Take back</button>
+          <button class="pillbtn dark" id="new">New game</button>
+        </div>
+      </aside>
+    </div>
+  </main>
+  <script type="module" src="chess-app.js"></script>
+</body>
+</html>
