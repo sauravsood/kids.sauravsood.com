@@ -2,146 +2,44 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <title>Trace</title>
-  <meta name="description" content="Pick an animal and trace it in your favourite colours.">
+  <script>
+    // Old Trace links (kids.sauravsood.com/#history, /#d/12, /#lion …) lived
+    // at the root before Trace moved to /trace/. The hub has no hash routes of
+    // its own, so any hash here belongs to Trace. Runs before anything else.
+    function toTrace() { if (location.hash.length > 1) location.replace("/trace/" + location.hash); }
+    toTrace();
+    addEventListener("hashchange", toTrace);
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Kids</title>
+  <meta name="description" content="Things to make and explore: tracing, the night sky and dinosaurs in 3D.">
   <meta name="theme-color" content="#fff7ec">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Trace">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css">
+  <meta name="apple-mobile-web-app-title" content="Kids">
+  <link rel="icon" href="/shared/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/trace/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="/shared/kids.css">
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K71K5101R8"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    // Ad signals are off: this site is for kids.
+    gtag('config', 'G-K71K5101R8', { allow_google_signals: false, allow_ad_personalization_signals: false });
+  </script>
 </head>
 <body>
-  <!-- Always-visible bar once signed in: who's drawing, how many drawings, time spent, tabs. -->
-  <header id="topbar" class="topbar" hidden>
-    <a id="topback" class="icon-btn topback" href="#" aria-label="Back" hidden>
-      <svg viewBox="0 0 24 24"><path d="M15 5 L8 12 L15 19"/></svg>
-    </a>
-    <button id="who" class="who" aria-label="Profile">
-      <span id="who-initial" class="initial"></span>
-      <span id="who-name" class="who-name"></span>
-    </button>
-    <div class="stats" aria-label="Stats">
-      <span class="stat" title="Drawings">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20 L15 5 L19 8 L8 23 Z" transform="translate(0 -2)"/></svg>
-        <b id="stat-drawings">0</b>
-      </span>
-      <span class="stat" title="Time spent">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9 V13 L15 15 M9 2 H15"/></svg>
-        <b id="stat-time">0m</b>
-      </span>
-    </div>
-    <nav class="tabs" aria-label="Sections">
-      <a id="tab-animals" class="tab" href="#">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>
-        <span>Animals</span>
-      </a>
-      <a id="tab-history" class="tab" href="#history">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12 A8.5 8.5 0 1 0 6 6 M3 3 V7 H7 M12 7.5 V12 L15 14"/></svg>
-        <span>History</span>
-      </a>
-    </nav>
-  </header>
-
-  <main id="signin" class="screen center" hidden>
-    <div class="welcome">
-      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><path d="M14 50 L40 14 L50 22 L24 58 L12 60 Z" fill="#ff9f1c"/><path d="M40 14 L44 8 L54 16 L50 22 Z" fill="#ff4d6d"/><path d="M14 50 L24 58 L12 60 Z" fill="#3a3f4b"/></svg>
-      <h1>Trace</h1>
-      <div id="google-btn" class="google-btn"></div>
-      <button id="dev-login" class="pill" hidden>Dev sign-in</button>
-      <p id="signin-note" class="note">Grown-ups: sign in to save drawings.</p>
-    </div>
+  <main class="page">
+    <ul id="tiles" class="tiles" aria-label="Things to do"></ul>
   </main>
-
-  <main id="hello" class="screen center" hidden>
-    <form id="name-form" class="welcome">
-      <h1>Hi! What’s your name?</h1>
-      <input id="name-input" class="name-input" maxlength="30" autocomplete="off" autocapitalize="words" spellcheck="false" required aria-label="Name">
-      <button class="go" aria-label="Start">
-        <svg viewBox="0 0 24 24"><path d="M5 12 H19 M13 6 L19 12 L13 18"/></svg>
-      </button>
-    </form>
-  </main>
-
-  <main id="home" class="screen" hidden>
-    <ul id="categories" class="grid" aria-label="Animal groups"></ul>
-  </main>
-
-  <main id="category" class="screen" hidden>
-    <div class="crumb">
-      <a class="icon-btn" href="#" aria-label="Back to groups">
-        <svg viewBox="0 0 24 24"><path d="M15 5 L8 12 L15 19"/></svg>
-      </a>
-      <h2 id="category-name"></h2>
-    </div>
-    <ul id="animals" class="grid" aria-label="Animals"></ul>
-  </main>
-
-  <main id="history" class="screen" hidden>
-    <div id="history-list"></div>
-    <div id="history-empty" class="empty" hidden>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12 A8.5 8.5 0 1 0 6 6 M3 3 V7 H7 M12 7.5 V12 L15 14"/></svg>
-      <a class="pill" href="#">Draw something!</a>
-    </div>
-  </main>
-
-  <section id="draw" class="screen" hidden>
-    <div id="stage-wrap" class="stage-wrap">
-      <div id="stage" class="stage">
-        <div id="guide" class="guide-layer"></div>
-        <canvas id="ink"></canvas>
-      </div>
-    </div>
-
-    <div class="tools" role="toolbar" aria-label="Drawing tools">
-      <div id="colors" class="colors" role="radiogroup" aria-label="Colours"></div>
-      <div class="row">
-        <div id="sizes" class="sizes" role="radiogroup" aria-label="Crayon size"></div>
-        <button id="eraser" class="icon-btn" aria-label="Eraser" aria-pressed="false">
-          <svg viewBox="0 0 24 24"><path d="M3 15 L12 6 L19 13 L12 20 H7 Z M7.5 10.5 L15 18 M12 20 H21"/></svg>
-        </button>
-        <button id="undo" class="icon-btn" aria-label="Undo">
-          <svg viewBox="0 0 24 24"><path d="M9 5 L4 10 L9 15 M4 10 H14 A5 5 0 0 1 14 20 H10"/></svg>
-        </button>
-        <button id="clear" class="icon-btn" aria-label="Clear">
-          <svg viewBox="0 0 24 24"><path d="M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 21 H17 L18 7 M10 11 V17 M14 11 V17"/></svg>
-        </button>
-        <button id="star" class="icon-btn star" aria-label="All done">
-          <svg viewBox="0 0 24 24"><path d="M12 2.5 L14.9 8.6 L21.5 9.3 L16.6 13.8 L18 20.5 L12 17.1 L6 20.5 L7.4 13.8 L2.5 9.3 L9.1 8.6 Z"/></svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Shown instead of the tools when looking at a past drawing. -->
-    <div class="viewbar">
-      <a class="icon-btn" href="#history" aria-label="Back to history">
-        <svg viewBox="0 0 24 24"><path d="M15 5 L8 12 L15 19"/></svg>
-      </a>
-      <span id="view-date" class="view-date"></span>
-      <button id="view-delete" class="icon-btn" aria-label="Delete drawing"><svg viewBox="0 0 24 24"><path d="M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 21 H17 L18 7 M10 11 V17 M14 11 V17"/></svg></button>
-    </div>
-  </section>
-
-  <dialog id="profile" class="sheet">
-    <form id="profile-form" method="dialog">
-      <input id="profile-name" class="name-input" maxlength="30" autocomplete="off" autocapitalize="words" spellcheck="false" required aria-label="Name">
-      <p id="profile-today" class="note"></p>
-      <p id="profile-email" class="note"></p>
-      <div class="sheet-row">
-        <button id="signout" type="button" class="pill ghost">Sign out</button>
-        <button id="profile-cancel" type="button" class="pill ghost">Cancel</button>
-        <button type="submit" class="pill">Save</button>
-      </div>
-    </form>
-  </dialog>
-
-  <div id="toast" class="toast" role="status" hidden></div>
-  <div id="confetti" class="confetti" aria-hidden="true"></div>
-
-  <script type="module" src="app.js"></script>
+  <script type="module">
+    import { TILES } from "/tiles.js";
+    const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    document.getElementById("tiles").innerHTML = TILES.map((t) => `
+      <li><a class="tile" href="${esc(t.href)}" style="--tint:${esc(t.tint)}">
+        <div class="art">${t.art}</div>
+        <div class="words"><h2>${esc(t.name)}</h2><p>${esc(t.line)}</p></div>
+      </a></li>`).join("");
+  </script>
 </body>
 </html>

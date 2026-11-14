@@ -1,0 +1,104 @@
+From b03b1db8bb5cb0970e89941380e00290dfda7088 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 14 Nov 2026 01:58:39 +0000
+Subject: [PATCH 1/2] Rename the museum to 3D Dino for kids.sauravsood.com
+ (brand policy)
+
+---
+ src/i18n/messages.ts | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/i18n/messages.ts b/src/i18n/messages.ts
+index 1ef0454..c49dd2a 100644
+--- a/src/i18n/messages.ts
++++ b/src/i18n/messages.ts
+@@ -14,12 +14,12 @@ interface ResearchSummaryInput {
+ }
+ 
+ const zhCN = {
+-  museumName: '史前动物博物馆',
++  museumName: '3D 恐龙',
+   creatorBrand: 'Leon做了个',
+   creatorAboutLabel: '了解Leon做了个和这座博物馆',
+   todayMeet: '今天认识',
+   localReview: '本地评审',
+-  documentTitle: '史前动物博物馆 | 给 2–6 岁孩子的免费 3D 恐龙与古生物网站',
++  documentTitle: '3D 恐龙 | 基于 Leon做了个 的史前动物博物馆',
+   seo: {
+     description: (count: number) =>
+       `和孩子一起走进 3D 史前动物博物馆，观察 ${count} 位来自陆地、天空与水中的史前朋友。`,
+@@ -215,12 +215,12 @@ type WidenMessages<Value> = Value extends string
+ export type MuseumMessages = WidenMessages<typeof zhCN>
+ 
+ const en = {
+-  museumName: 'Prehistoric Animal Museum',
++  museumName: '3D Dino',
+   creatorBrand: 'Leon Made This',
+   creatorAboutLabel: 'About Leon Made This and this museum',
+   todayMeet: 'Meet today’s friend',
+   localReview: 'Local review',
+-  documentTitle: 'Prehistoric Animal Museum for Kids | Free Interactive 3D Exhibits',
++  documentTitle: '3D Dino | Based on the Prehistoric Animal Museum by Leon Made This',
+   seo: {
+     description: (count) =>
+       `Explore ${count} prehistoric animals from land, sky and sea in a gentle 3D museum made for young children and their grown-ups.`,
+-- 
+2.43.0
+
+
+From c5fbafc3a5e576fe1d0b1a49066c3075362f9307 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 14 Nov 2026 02:01:46 +0000
+Subject: [PATCH 2/2] Use the 3D Dino name in page titles too
+
+---
+ scripts/multilingual-seo.ts | 8 ++++----
+ src/content/animal-seo.ts   | 4 ++--
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/scripts/multilingual-seo.ts b/scripts/multilingual-seo.ts
+index 8ed3347..1c1e42f 100644
+--- a/scripts/multilingual-seo.ts
++++ b/scripts/multilingual-seo.ts
+@@ -206,9 +206,9 @@ const pageCopy = {
+     locale: 'zh-CN',
+     htmlLang: 'zh-CN',
+     brand: 'Leon做了个',
+-    title: '史前动物博物馆 | 给 2–6 岁孩子的免费 3D 恐龙与古生物网站',
++    title: '3D 恐龙 | 基于 Leon做了个 的史前动物博物馆',
+     description: `和孩子一起走进 3D 史前动物博物馆，观察 ${catalogueAnimalCount} 位来自陆地、天空与水中的史前朋友。`,
+-    heading: '史前动物博物馆',
++    heading: '3D 恐龙',
+     introduction:
+       '这是一座面向 2–6 岁孩子和家长的 3D 史前动物博物馆。一起转动模型，听观察引导，再读给家长的科学资料。',
+     privacy: `展厅收录 ${catalogueAnimalCount} 位来自陆地、天空与水中的史前动物。无需账号，没有广告，声音只会在你主动点击后播放。`,
+@@ -222,9 +222,9 @@ const pageCopy = {
+     locale: 'en',
+     htmlLang: 'en',
+     brand: 'Leon Made This',
+-    title: 'Prehistoric Animal Museum for Kids | Free Interactive 3D Exhibits',
++    title: '3D Dino | Based on the Prehistoric Animal Museum by Leon Made This',
+     description: `Explore ${catalogueAnimalCount} prehistoric animals from land, sky and sea in a gentle 3D museum made for young children and their grown-ups.`,
+-    heading: 'Prehistoric Animal Museum',
++    heading: '3D Dino',
+     introduction:
+       'A gentle 3D museum for children aged 2–6 and the grown-ups exploring with them. Turn each model, listen to a short observation guide and open the grown-up notes when you want to go deeper.',
+     privacy: `Meet ${catalogueAnimalCount} prehistoric animals from land, sky and sea. There are no accounts or adverts, and narration only plays when you choose it.`,
+diff --git a/src/content/animal-seo.ts b/src/content/animal-seo.ts
+index 5df26b9..cdc673b 100644
+--- a/src/content/animal-seo.ts
++++ b/src/content/animal-seo.ts
+@@ -28,8 +28,8 @@ const searchDescriptions: Readonly<Record<string, Partial<Record<Locale, string>
+ 
+ export function animalSeoTitle(name: string, locale: Locale): string {
+   return locale === 'zh-CN'
+-    ? `${name} 3D模型与科普 | 史前动物博物馆`
+-    : `${name} 3D model & facts | Prehistoric Animal Museum`
++    ? `${name} 3D模型与科普 | 3D 恐龙`
++    : `${name} 3D model & facts | 3D Dino`
+ }
+ 
+ export function animalSeoDescription(
+-- 
+2.43.0
+

@@ -1,0 +1,16 @@
+{
+  "name": "Trace",
+  "short_name": "Trace",
+  "description": "Pick an animal and trace it in your favourite colours.",
+  "start_url": "/trace/",
+  "scope": "/trace/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fff7ec",
+  "theme_color": "#fff7ec",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
