@@ -103,7 +103,7 @@ export const CATEGORIES = [
         line: "Draw a friend on paper and watch it move." },
       { name: "Pixel Art", href: "/pixel/", age: "6+", tint: "#fde2ec", art: ART.pixel,
         line: "Make little pictures one square at a time." },
-      { name: "Music Lab", soon: true, age: "4+", tint: "#e6e3ff", art: ART.music,
+      { name: "Music Lab", href: "/music/", age: "4+", tint: "#e6e3ff", art: ART.music,
         line: "Make tunes and beats by tapping squares." },
     ],
   },
