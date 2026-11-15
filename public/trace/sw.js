@@ -11,7 +11,7 @@
 // 20 MB) is cached the first time it's used, in a cache of its own that
 // survives VERSION bumps. Change MODELS when those files change.
 
-const VERSION = "trace-v4";
+const VERSION = "trace-v5";
 const MODELS = "trace-models-v1";
 const FILES = [
   "./",
@@ -27,6 +27,8 @@ const FILES = [
   "icons/icon-512.png",
   "icons/apple-touch-icon.png",
   "vendor/perfect-freehand/perfect-freehand.mjs",
+  "vendor/page-flip/page-flip.module.js",
+  "vendor/page-flip/stPageFlip.css",
   "/shared/apple.js",
 ];
 const NETWORK_WAIT_MS = 2500;

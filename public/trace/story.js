@@ -1,11 +1,16 @@
 // "Animate now": the child's own traced animal becomes the star of a little
 // picture book of an old nursery rhyme (all public domain).
 //
-// Calm by design: pages only turn when the child taps, each page plays one
-// slow move and then the animal just breathes, there's no sound, and the
-// book ends with "The end" as a natural stopping point.
+// Pages curl over like paper (StPageFlip, MIT, vendored unchanged). The
+// play button reads the rhyme aloud and turns the pages by itself.
+//
+// Calm by design: nothing moves on to the next page or makes a sound unless
+// the child taps (a page turn or the play button), each page plays one
+// slow move and then the animal just breathes, the voice is soft and slow,
+// and the book ends with "The end" as a natural stopping point.
 
 import { ANIMALS, CATEGORIES } from "./animals.js";
+import { PageFlip } from "./vendor/page-flip/page-flip.module.js";
 
 const W = 1600;
 const H = 1000;
@@ -356,6 +361,8 @@ let clipId = 0;
 // Scenes are clipped to their frame, so nothing pokes out on narrow screens.
 function sceneSvg(inner) {
   const id = `scene${++clipId}`;
+  // Gradient ids must be unique: every page of the book is in the page at once.
+  inner = inner.replace(/(id="|url\(#)(day|night\d+)/g, `$1$2-${id}`);
   return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true"><defs><clipPath id="${id}"><rect width="${W}" height="${H}"/></clipPath></defs><g clip-path="url(#${id})">${inner}</g></svg>`;
 }
 
@@ -387,63 +394,198 @@ function showShelf() {
   current.onPage?.("shelf");
 }
 
-function showPage(n, direction = 1) {
-  const { book, img, animal, kidName } = current;
-  current.page = n;
-  const dialog = $("story");
-  dialog.dataset.view = "page";
-  const end = n >= book.pages.length;
-  const html = end
-    ? `<div class="story-scene end">${sceneSvg(["boat", "owlcat", "fishalive"].includes(book.id)
+// The pages of the open book, built all at once so StPageFlip can curl them.
+function pageHtml(book, n) {
+  const { img, animal, kidName } = current;
+  if (n >= book.pages.length) {
+    return `<div class="story-scene end">${sceneSvg(["boat", "owlcat", "fishalive"].includes(book.id)
         ? `${nightSky(29)}${moon(1300, 200, 80)}<rect x="0" y="720" width="${W}" height="${H - 720}" fill="#3f6f9a" stroke="#3a3f4b" stroke-width="6"/>${actor(img, 800, 700, 340, "", "rock-slow")}`
         : `${nightSky(29)}${moon(1300, 200, 80)}${hill()}${actor(img, 800, 640, 380, "", "breathe-slow")}`)}</div>
-       <p class="story-text">The end</p>`
-    : `<div class="story-scene">${sceneSvg(book.pages[n].scene(img, animal))}</div>
-       <p class="story-text">${esc(book.pages[n].text(animal, kidName))}</p>`;
-  const stage = $("story-pages");
-  const old = stage.querySelector(".story-page:not(.leaving)");
-  const page = document.createElement("div");
-  page.className = "story-page";
-  page.innerHTML = html;
-  if (old && direction > 0) {
-    // The old page turns over like paper, showing the new one under it.
-    stage.insertBefore(page, old);
-    old.classList.add("leaving", "turn");
-    old.addEventListener("animationend", () => old.remove(), { once: true });
-    setTimeout(() => old.remove(), 1200);
-  } else {
-    if (old) old.remove();
-    page.classList.add("fade-in");
-    stage.appendChild(page);
+       <p class="story-text">The end</p>`;
   }
-  $("story-prev").disabled = n === 0;
-  dialog.classList.toggle("at-end", end);
-  current.onPage?.(book.id);
+  return `<div class="story-scene">${sceneSvg(book.pages[n].scene(img, animal))}</div>
+     <p class="story-text">${esc(book.pages[n].text(animal, kidName))}</p>`;
 }
 
+const pageText = (book, n) => (n >= book.pages.length ? "The end." : book.pages[n].text(current.animal, current.kidName));
+
+let flipBook = null;
+
+function openBook(book) {
+  stopReading();
+  destroyBook();
+  current.book = book;
+  current.page = 0;
+  const dialog = $("story");
+  dialog.dataset.view = "page";
+  // A fresh holder each time: StPageFlip removes its element when destroyed.
+  const holder = document.createElement("div");
+  holder.className = "flip-holder";
+  $("story-pages").appendChild(holder);
+  const pages = [];
+  for (let n = 0; n <= book.pages.length; n++) {
+    const page = document.createElement("div");
+    page.className = "book-page";
+    page.innerHTML = `<div class="book-paper">${pageHtml(book, n)}</div>`;
+    holder.appendChild(page);
+    pages.push(page);
+  }
+  // One page at a time (portrait), turned with a paper curl and shadow.
+  flipBook = new PageFlip(holder, {
+    width: 1600,
+    height: 1150,
+    size: "stretch",
+    minWidth: 5000,
+    maxWidth: 5000,
+    minHeight: 100,
+    maxHeight: 5000,
+    usePortrait: true,
+    showCover: false,
+    drawShadow: true,
+    maxShadowOpacity: 0.45,
+    flippingTime: 1100,
+    mobileScrollSupport: false,
+    swipeDistance: 40,
+    showPageCorners: true,
+    disableFlipByClick: true,
+  });
+  flipBook.loadFromHTML(pages);
+  flipBook.on("flip", (e) => setLivePage(e.data));
+  setLivePage(0);
+}
+
+function destroyBook() {
+  if (flipBook) {
+    try { flipBook.destroy(); } catch { /* already gone */ }
+    flipBook = null;
+  }
+  $("story-pages").innerHTML = "";
+}
+
+// The page in view plays its little animation (restarted on every visit).
+function setLivePage(n) {
+  if (!current?.book) return;
+  current.page = n;
+  const pages = $("story-pages").querySelectorAll(".book-page");
+  pages.forEach((p, i) => { if (i !== n) p.classList.remove("live"); });
+  const page = pages[n];
+  if (page) {
+    page.classList.remove("live");
+    void page.offsetWidth;
+    page.classList.add("live");
+  }
+  const end = n >= current.book.pages.length;
+  $("story-prev").disabled = n === 0;
+  $("story").classList.toggle("at-end", end);
+  current.onPage?.(current.book.id);
+  if (reading) readPage();
+}
+
+// ---------- Reading aloud ----------
+// The play button reads each page with the device's own voice (works
+// offline) and turns to the next page when it's done. Nothing plays until
+// it's tapped.
+
+let reading = false;
+let readTimer = 0;
+let readToken = 0;
+
+function pickVoice() {
+  const synth = window.speechSynthesis;
+  if (!synth) return null;
+  const voices = synth.getVoices().filter((v) => /^en/i.test(v.lang));
+  const liked = ["Samantha", "Karen", "Moira", "Tessa", "Serena", "Kate", "Daniel", "Google UK English Female", "Google US English"];
+  for (const name of liked) {
+    const v = voices.find((x) => x.name.startsWith(name));
+    if (v) return v;
+  }
+  return voices.find((v) => v.localService) || voices[0] || null;
+}
+
+function readPage() {
+  clearTimeout(readTimer);
+  const token = ++readToken;
+  const book = current?.book;
+  if (!book) return;
+  const n = current.page;
+  const text = pageText(book, n);
+  const end = n >= book.pages.length;
+  let done = false;
+  const next = () => {
+    if (done || token !== readToken || !reading) return;
+    done = true;
+    clearTimeout(readTimer);
+    if (end) { setReading(false); return; }
+    // A short, calm pause, then the page turns by itself.
+    readTimer = setTimeout(() => {
+      if (token === readToken && reading && flipBook) flipBook.flipNext();
+    }, 1400);
+  };
+  // In case the voice never says it finished (or there's no voice at all).
+  const words = text.split(/\s+/).length;
+  readTimer = setTimeout(next, 2500 + words * 520);
+  const synth = window.speechSynthesis;
+  if (!synth || typeof SpeechSynthesisUtterance === "undefined") return;
+  synth.cancel();
+  // Let the page settle for a moment before reading it.
+  setTimeout(() => {
+    if (token !== readToken || !reading) return;
+    const u = new SpeechSynthesisUtterance(text.replace(/E-I-E-I-O/g, "ee-eye, ee-eye, oh"));
+    const voice = pickVoice();
+    if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = "en-GB";
+    u.rate = 0.85;
+    u.pitch = 1.08;
+    u.onend = () => { clearTimeout(readTimer); readTimer = setTimeout(next, 300); };
+    u.onerror = () => { clearTimeout(readTimer); readTimer = setTimeout(next, 300); };
+    synth.speak(u);
+  }, 500);
+}
+
+function setReading(on) {
+  reading = on;
+  $("story").classList.toggle("reading", on);
+  $("story-play").setAttribute("aria-label", on ? "Pause" : "Read to me");
+  if (on) {
+    // Read again from the start if the book is at "The end".
+    if (current?.book && current.page >= current.book.pages.length) { flipBook?.turnToPage(0); setLivePage(0); return; }
+    readPage();
+  } else {
+    readToken++;
+    clearTimeout(readTimer);
+    try { window.speechSynthesis?.cancel(); } catch { /* none */ }
+  }
+}
+
+function stopReading() { if (reading) setReading(false); }
+
 export function closeStory() {
+  stopReading();
+  destroyBook();
   const dialog = $("story");
   if (dialog.open) dialog.close();
-  $("story-pages").innerHTML = "";
   current = null;
 }
 
 $("story-shelf").addEventListener("click", (e) => {
   const b = e.target.closest(".book-cover");
   if (!b || !current) return;
-  current.book = BOOKS.find((x) => x.id === b.dataset.book);
-  $("story-pages").innerHTML = "";
-  showPage(0);
+  openBook(BOOKS.find((x) => x.id === b.dataset.book));
 });
 $("story-next").addEventListener("click", () => {
-  if (!current?.book) return;
-  if (current.page >= current.book.pages.length) { showShelf(); return; }
-  showPage(current.page + 1, 1);
+  if (!current?.book || !flipBook) return;
+  if (current.page >= current.book.pages.length) { stopReading(); destroyBook(); showShelf(); return; }
+  if (reading) { readToken++; try { window.speechSynthesis?.cancel(); } catch { /* none */ } }
+  flipBook.flipNext();
 });
 $("story-prev").addEventListener("click", () => {
-  if (current?.book && current.page > 0) showPage(current.page - 1, -1);
+  if (!current?.book || !flipBook || current.page === 0) return;
+  if (reading) { readToken++; try { window.speechSynthesis?.cancel(); } catch { /* none */ } }
+  flipBook.flipPrev();
 });
-$("story-again").addEventListener("click", () => { if (current?.book) { $("story-pages").innerHTML = ""; showPage(0); } });
-$("story-shelf-btn").addEventListener("click", () => { if (current) { $("story-pages").innerHTML = ""; showShelf(); } });
+$("story-play").addEventListener("click", () => setReading(!reading));
+$("story-again").addEventListener("click", () => { if (current?.book) openBook(current.book); });
+$("story-shelf-btn").addEventListener("click", () => { if (current) { stopReading(); destroyBook(); showShelf(); } });
 $("story-close").addEventListener("click", closeStory);
 $("story").addEventListener("cancel", (e) => { e.preventDefault(); closeStory(); });
+// Voices arrive late on some devices.
+try { window.speechSynthesis?.addEventListener?.("voiceschanged", () => {}); } catch { /* none */ }

@@ -60,7 +60,9 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - Ten books, all public domain: *Hey Diddle Diddle*, *Row, Row, Row Your Boat*, *Twinkle, Twinkle, Little Star* (Jane Taylor, 1806), *Baa, Baa, Black Sheep*, *This Little Piggy*, *Old MacDonald Had a Farm* (the child's animal and its sound go into the verse: "he had a cow… with a moo-moo here"), *Two Little Dickie Birds* (two of the child's bird), *The Owl and the Pussy-cat* (Edward Lear, 1871, abridged), *One, Two, Three, Four, Five* and *Ride a Cock-Horse*. Scenes are inline SVG drawn for this app; some props reuse outlines from `animals.js`.
 - Each book lists the animals it suits (`for` in `story.js`). Matching books come first on the shelf, most specific first, with the child's animal on the cover (a sheep gets *Baa, Baa, Black Sheep*, then *Old MacDonald*).
 - It also works from History: opening an older drawing shows the same Animate now button, so past pictures can star in a book too.
-- Calm: pages turn only when the child taps (no autoplay), each page plays one slow move and then the animal just breathes, there's no sound, and every book ends on "The end" with Read again, other books, or close. Reduced-motion settings stop the movement.
+- **Page turns** curl over like paper, with shading, using [StPageFlip](https://github.com/Nodlik/StPageFlip) 2.0.7 (MIT, vendored unchanged in `public/trace/vendor/page-flip/`). Children can also swipe or drag a corner. Only the page in view animates, and its move starts over each time it's shown.
+- **Play button** (green): reads each page aloud with the device's own voice (Web Speech API, so it works offline and needs no audio files), waits a moment, and turns the page by itself until "The end". Tap again to pause. There is no sound until it's tapped. On an iPhone the silent switch can mute it.
+- Calm: nothing turns or speaks unless the child taps, each page plays one slow move and then the animal just breathes, and every book ends on "The end" with Read again, other books, or close. Reduced-motion settings stop the movement.
 - Each book sends a page view as `/trace/story/<book>` (`/trace/story/shelf` for the book picker).
 
 ## Music Lab (`/music/`)
@@ -129,6 +131,7 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - **Chrome Music Lab** is Apache-2.0 and Tone.js is MIT; the piano and harp samples come from tonejs-instruments (MIT package; its samples are credited there as CC BY 3.0).
 - **chessground** is GPL-3.0-or-later and **chess.js** is BSD-2-Clause; both licence files ship in `public/chess/app/vendor/`, and the chess app built on them is GPL-3.0-or-later.
 - **My Animals** uses the U²-Net small model (Xuebin Qin et al., Apache-2.0; ONNX export from rembg, MIT) and onnxruntime-web (Microsoft, MIT). Notes and licence are in `public/trace/models/README.md` and `public/trace/vendor/onnxruntime/LICENSE`.
+- **StPageFlip** (Nodlik, MIT) turns the storybook pages; its licence is in `public/trace/vendor/page-flip/LICENSE`.
 - **Piskel** is Apache-2.0. **Sandspiel** is MIT. Each ships its `LICENSE` in its `app/` folder and is credited on its landing page.
 - The AGPL asks that people using a modified copy over the web can get its source. Each project page links to the source of the copy running here and to this repo.
 

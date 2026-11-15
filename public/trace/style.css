@@ -732,3 +732,39 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
   37.5% { transform: translate(270px, -50px); } 50% { transform: translate(360px, 0); } 62.5% { transform: translate(450px, -50px); }
   75% { transform: translate(540px, 0); } 87.5% { transform: translate(630px, -50px); } 100% { transform: translate(720px, 0); }
 }
+
+/* Page-curl book (StPageFlip) and the play button */
+.flip-holder { width: 100%; height: 100%; min-width: 0 !important; max-width: none !important; }
+/* StPageFlip sizes the book from its width (padding-bottom); keep it in the box. */
+.flip-holder .stf__wrapper { max-height: 100%; }
+.book-page { background: var(--paper); }
+.book-paper {
+  width: 100%;
+  height: 100%;
+  padding: 2.2%;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border-radius: 6px 14px 14px 6px;
+  box-shadow: inset 16px 0 20px -14px rgba(58, 63, 75, 0.28);
+}
+/* Only the page in view moves; its animation starts over each visit. */
+.book-page:not(.live) .story-scene * { animation: none !important; }
+.story-play {
+  width: 84px;
+  height: 84px;
+  border: 0;
+  border-radius: 50%;
+  background: #1fb36b;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.story-play:active { transform: translateY(3px); }
+.story-play svg { width: 40px; height: 40px; fill: #fff; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.story-play .i-pause { display: none; }
+.story.reading .story-play .i-play { display: none; }
+.story.reading .story-play .i-pause { display: block; }
+.story.reading .story-play { animation: breathe-btn 2.4s ease-in-out infinite alternate; }
+@keyframes breathe-btn { to { box-shadow: 0 0 0 10px rgba(31, 179, 107, 0.18); } }
