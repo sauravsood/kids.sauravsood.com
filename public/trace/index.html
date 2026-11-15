@@ -129,6 +129,13 @@
       </div>
     </div>
 
+    <div class="animate-row">
+      <button id="animate" class="pill animate-btn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5 C9.5 4.8 6.5 4.5 3.5 5 V18.5 C6.5 18 9.5 18.3 12 20 C14.5 18.3 17.5 18 20.5 18.5 V5 C17.5 4.5 14.5 4.8 12 6.5 Z M12 6.5 V20"/></svg>
+        <span>Animate now</span>
+      </button>
+    </div>
+
     <div class="tools" role="toolbar" aria-label="Drawing tools">
       <div id="colors" class="colors" role="radiogroup" aria-label="Colours"></div>
       <div class="row">
@@ -189,6 +196,34 @@
         </button>
         <button id="snap-keep" class="go" aria-label="Keep this animal">
           <svg viewBox="0 0 24 24"><path d="M5 12.5 L10 17.5 L19 7"/></svg>
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Animate now: the child's animal in a picture book of a nursery rhyme (story.js). -->
+  <dialog id="story" class="story" data-view="shelf">
+    <button id="story-close" class="icon-btn story-close" aria-label="Close">
+      <svg viewBox="0 0 24 24"><path d="M6 6 L18 18 M18 6 L6 18"/></svg>
+    </button>
+    <div class="story-shelf-view">
+      <img id="story-me" class="story-me" alt="">
+      <ul id="story-shelf" class="shelf" aria-label="Books"></ul>
+    </div>
+    <div class="story-book-view">
+      <div id="story-pages" class="story-pages"></div>
+      <div class="story-nav">
+        <button id="story-shelf-btn" class="icon-btn" aria-label="Other books">
+          <svg viewBox="0 0 24 24"><path d="M4 4.5 H8 V19.5 H4 Z M10 4.5 H14 V19.5 H10 Z M15.5 6 L19 5 L21.5 18.5 L18 19.5 Z"/></svg>
+        </button>
+        <button id="story-prev" class="icon-btn" aria-label="Back a page">
+          <svg viewBox="0 0 24 24"><path d="M15 5 L8 12 L15 19"/></svg>
+        </button>
+        <button id="story-next" class="go" aria-label="Turn the page">
+          <svg viewBox="0 0 24 24"><path d="M9 5 L16 12 L9 19"/></svg>
+        </button>
+        <button id="story-again" class="icon-btn" aria-label="Read it again">
+          <svg viewBox="0 0 24 24"><path d="M4.5 12 A7.5 7.5 0 1 0 7 6.4 M4 3.5 V7.5 H8"/></svg>
         </button>
       </div>
     </div>
