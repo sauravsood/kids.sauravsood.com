@@ -18,6 +18,11 @@ const RETURN_RE = /^\/[a-z]{2,20}(\/[a-z]{2,20})?\/$/; // where Apple sign-in se
 const APPLE_STATE_COOKIE = "apple_state";
 const STATE_APPS = new Set(["money", "routines"]);
 const MAX_STATE = 100_000;
+// My Animals (Trace): outlines made on the device from a child's photo.
+const MINE_ID_RE = /^my[a-z]{6,18}$/;
+const SHAPE_RE = /^<path (class="line" )?d="[MQLZ0-9 -]{3,20000}"\/>$/;
+const PHOTO_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]{100,60000}$/;
+const MAX_MINE = 500;
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS users (
@@ -58,6 +63,18 @@ const SCHEMA = [
      sub TEXT PRIMARY KEY,
      user_id INTEGER NOT NULL,
      created_at INTEGER NOT NULL)`,
+  // My Animals: shapes is a JSON list of SVG <path> strings; photo is a small
+  // JPEG of the animal made on the device (no EXIF). hidden = removed by the child.
+  `CREATE TABLE IF NOT EXISTS my_animals (
+     user_id INTEGER NOT NULL,
+     client_id TEXT NOT NULL,
+     shapes TEXT NOT NULL,
+     photo TEXT,
+     tint TEXT NOT NULL,
+     hidden INTEGER NOT NULL DEFAULT 0,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     PRIMARY KEY (user_id, client_id))`,
   ...FEEDBACK_SCHEMA,
 ];
 
@@ -195,6 +212,55 @@ async function route(request, env, url) {
         .bind(user.id, app, text, now).run();
       return json({ ok: true, updatedAt: now });
     }
+  }
+
+  // My Animals. GET ?meta=1 lists ids and times; GET ?ids=a,b gets them in
+  // full; PUT creates or updates one (the newest edit wins, safe to repeat).
+  if (path === "/api/mine" && method === "GET") {
+    if (url.searchParams.get("meta") === "1") {
+      const { results } = await env.DB.prepare(
+        "SELECT client_id, updated_at FROM my_animals WHERE user_id = ? LIMIT 2000").bind(user.id).all();
+      return json({ animals: results.map((r) => ({ id: r.client_id, updatedAt: r.updated_at })) });
+    }
+    const ids = (url.searchParams.get("ids") || "").split(",").filter((id) => MINE_ID_RE.test(id)).slice(0, 20);
+    if (!ids.length) return json({ animals: [] });
+    const { results } = await env.DB.prepare(
+      `SELECT * FROM my_animals WHERE user_id = ? AND client_id IN (${ids.map(() => "?").join(",")})`)
+      .bind(user.id, ...ids).all();
+    return json({ animals: results.map((r) => ({
+      id: r.client_id, shapes: JSON.parse(r.shapes), photo: r.photo, tint: r.tint, hidden: !!r.hidden,
+      createdAt: r.created_at, updatedAt: r.updated_at,
+    })) });
+  }
+  const mineMatch = path.match(/^\/api\/mine\/([a-z]{2,20})$/);
+  if (mineMatch && method === "PUT") {
+    const id = mineMatch[1];
+    if (!MINE_ID_RE.test(id)) throw new HttpError(400, "Bad id");
+    const raw = await body(request);
+    const shapes = raw.shapes;
+    if (!Array.isArray(shapes) || !shapes.length || shapes.length > 40
+      || !shapes.every((x) => typeof x === "string" && SHAPE_RE.test(x))) throw new HttpError(400, "Bad outline");
+    const photo = raw.photo == null ? null : String(raw.photo);
+    if (photo !== null && !PHOTO_RE.test(photo)) throw new HttpError(400, "Bad photo");
+    const tint = String(raw.tint || "");
+    if (!/^#[0-9a-f]{6}$/.test(tint)) throw new HttpError(400, "Bad colour");
+    const now = Date.now();
+    const updatedAt = clampTime(raw.updatedAt, now);
+    const createdAt = Math.min(clampTime(raw.createdAt, now), updatedAt);
+    const existing = await env.DB.prepare("SELECT 1 FROM my_animals WHERE user_id = ? AND client_id = ?").bind(user.id, id).first();
+    if (!existing) {
+      const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM my_animals WHERE user_id = ?").bind(user.id).first();
+      if (n >= MAX_MINE) throw new HttpError(413, "Too many animals");
+    }
+    await env.DB.prepare(
+      `INSERT INTO my_animals (user_id, client_id, shapes, photo, tint, hidden, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (user_id, client_id) DO UPDATE SET
+         shapes = excluded.shapes, photo = excluded.photo, tint = excluded.tint, hidden = excluded.hidden,
+         updated_at = excluded.updated_at
+       WHERE excluded.updated_at >= my_animals.updated_at`)
+      .bind(user.id, id, JSON.stringify(shapes), photo, tint, raw.hidden ? 1 : 0, createdAt, updatedAt).run();
+    return json({ ok: true });
   }
 
   if (path === "/api/drawings" && method === "GET") {

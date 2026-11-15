@@ -45,6 +45,15 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - **Works offline.** `public/trace/sw.js` (a service worker) keeps the page, code, outlines and icons on the device: network first with a 2.5 s wait, cache otherwise. Add any new file Trace needs to its `FILES` list and bump `VERSION`.
 - **Saves on the device, syncs later.** Drawings go to IndexedDB first (`local.js`), keyed by an id made on the device and by account, so two grown-ups on one iPad stay apart. `sync.js` sends changes (`PUT`/`DELETE /api/drawings/c/<id>`, newest edit wins, safe to repeat) and pulls drawings from other devices (`GET /api/drawings?meta=1`, then `?ids=…`). It runs after each save, every 30 s, when the internet comes back and when the app is reopened. Time spent and name changes wait in `localStorage` and are sent with the day they happened. A cloud-with-a-line icon in the top bar means "offline, saved here". Signing in and out need the internet.
 
+### My Animals (Trace)
+
+- A sixth group, **My Animals**, starts empty with a big camera button. On an iPad or phone it opens the camera (`<input type="file" accept="image/*" capture="environment">`); on a computer it opens a file picker.
+- `public/trace/photo.js` turns the photo into an outline **on the device**: U²-Net small (`models/u2netp.onnx`, 4.6 MB, Apache-2.0) finds the animal, the mask is cleaned up and its border becomes the outline, and a light edge finder adds up to 8 long lines inside (legs, wings, ears) as open `class="line"` paths. It runs in onnxruntime-web 1.31.1 (`vendor/onnxruntime/`, MIT), single-threaded WebAssembly, in about 2 seconds. The result uses the same 1000 × 1000 shape strings as `animals.js`.
+- The child sees the outline first, then keeps it (✓) or takes another photo. A kept outline becomes a tile for good, with a small square of the photo in its top-left corner, and opens straight away to trace. The trash on a tile (two taps) hides it; drawings of it still open from History.
+- **Photo privacy:** the full photo never leaves the device and isn't kept. Only a 160 px square around the animal is kept for the tile, redrawn on a canvas as a fresh JPEG, so the camera's EXIF (GPS place, time, device) is dropped.
+- **Offline:** the model and runtime (about 20 MB) are fetched the first time My Animals is opened online, and the service worker keeps them in their own cache (`trace-models-v1`, cache first). After that the camera works with no internet.
+- **Saving:** like drawings, My Animals are saved in IndexedDB first (database `trace-mine`, kept apart from the drawings database so it never needs an upgrade) and synced by `sync.js`: `PUT /api/mine/<id>` (newest edit wins, removals are `hidden: true`), `GET /api/mine?meta=1` and `?ids=…`. The server keeps them in the D1 table `my_animals`, up to 500 per account, and accepts only plain `<path>` shapes and JPEG photos, because shapes go into the page as SVG. Ids are `my` + 14 letters and double as animal ids in drawings.
+
 ## Music Lab (`/music/`)
 
 - `public/music/index.html` shows six experiments from Chrome Music Lab as tiles: Melody Maker, Arpeggios, Chords, Piano Roll, Harmonics and Strings. Each lives in `public/music/<name>/` and its Home button goes back to `/music/`. This is the one app where sound is on, and it only starts when the child taps.
@@ -110,6 +119,7 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - **The Evolution of Trust** is CC0 (public domain), music by Komiku (CC0); its sound effects are CC0, CC Sampling+ and CC BY-NC (fine for this ad-free site).
 - **Chrome Music Lab** is Apache-2.0 and Tone.js is MIT; the piano and harp samples come from tonejs-instruments (MIT package; its samples are credited there as CC BY 3.0).
 - **chessground** is GPL-3.0-or-later and **chess.js** is BSD-2-Clause; both licence files ship in `public/chess/app/vendor/`, and the chess app built on them is GPL-3.0-or-later.
+- **My Animals** uses the U²-Net small model (Xuebin Qin et al., Apache-2.0; ONNX export from rembg, MIT) and onnxruntime-web (Microsoft, MIT). Notes and licence are in `public/trace/models/README.md` and `public/trace/vendor/onnxruntime/LICENSE`.
 - **Piskel** is Apache-2.0. **Sandspiel** is MIT. Each ships its `LICENSE` in its `app/` folder and is credited on its landing page.
 - The AGPL asks that people using a modified copy over the web can get its source. Each project page links to the source of the copy running here and to this repo.
 
@@ -124,7 +134,7 @@ npx wrangler dev
 
 Deployed by Cloudflare Workers Builds from `main` with `npx wrangler deploy`. `wrangler.jsonc` serves `public/` as static files and runs `src/worker.js` for `/api/*` only.
 
-- **Database:** Cloudflare D1 (`kids`), bound as `DB`. The Worker creates its tables on first use (`users`, `identities`, `sessions`, `drawings`, `usage`, `app_state`) and adds `drawings.client_id` to older databases.
+- **Database:** Cloudflare D1 (`kids`), bound as `DB`. The Worker creates its tables on first use (`users`, `identities`, `sessions`, `drawings`, `usage`, `app_state`, `my_animals`) and adds `drawings.client_id` to older databases.
 - **Apple sign-in:** web flow with no Apple script and no Apple private key. `public/shared/apple.js` sets a short `apple_state` cookie and sends the browser to Apple; Apple posts back to `/api/auth/apple/callback`, which checks the ID token against Apple's public keys (audience = the Services ID, nonce = the cookie), starts the session and returns to the app that asked. The Services ID goes in `APPLE_CLIENT_ID` in `wrangler.jsonc` (empty hides the button). In the Apple Developer account the Services ID needs domain `kids.sauravsood.com` and return URL `https://kids.sauravsood.com/api/auth/apple/callback`.
 - **One account, two sign-ins:** a new sign-in whose provider says the email is verified joins the existing account with that email (table `identities`), so Google on one device and Apple on another see the same drawings. Apple's "Hide my email" relay addresses won't match, so those get their own account.
 - **Google sign-in:** a Google OAuth *Web application* client with `https://kids.sauravsood.com` as an authorised JavaScript origin. Its client ID goes in `GOOGLE_CLIENT_ID` in `wrangler.jsonc`. Trace moving to `/trace/` doesn't change the origin, so nothing changes here.
