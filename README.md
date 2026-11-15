@@ -57,7 +57,9 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 ### Animate now (Trace)
 
 - An **Animate now** button sits under the paper on the tracing page (and when looking at a saved drawing). It turns the child's animal, with their outline in solid lines and their crayon on top, into a cut-out picture and opens a little picture book (`public/trace/story.js`).
-- Three books, all public domain: *Hey Diddle Diddle* (traditional; the child's animal is the one that jumps over the moon, named in the text: "The cat jumped over the moon", or "Mia’s animal…" for a My Animal), *Row, Row, Row Your Boat* (traditional) and *Twinkle, Twinkle, Little Star* (Jane Taylor, 1806). Scenes are inline SVG drawn for this app; the cat, dog and fish props reuse outlines from `animals.js`.
+- Ten books, all public domain: *Hey Diddle Diddle*, *Row, Row, Row Your Boat*, *Twinkle, Twinkle, Little Star* (Jane Taylor, 1806), *Baa, Baa, Black Sheep*, *This Little Piggy*, *Old MacDonald Had a Farm* (the child's animal and its sound go into the verse: "he had a cow… with a moo-moo here"), *Two Little Dickie Birds* (two of the child's bird), *The Owl and the Pussy-cat* (Edward Lear, 1871, abridged), *One, Two, Three, Four, Five* and *Ride a Cock-Horse*. Scenes are inline SVG drawn for this app; some props reuse outlines from `animals.js`.
+- Each book lists the animals it suits (`for` in `story.js`). Matching books come first on the shelf, most specific first, with the child's animal on the cover (a sheep gets *Baa, Baa, Black Sheep*, then *Old MacDonald*).
+- It also works from History: opening an older drawing shows the same Animate now button, so past pictures can star in a book too.
 - Calm: pages turn only when the child taps (no autoplay), each page plays one slow move and then the animal just breathes, there's no sound, and every book ends on "The end" with Read again, other books, or close. Reduced-motion settings stop the movement.
 - Each book sends a page view as `/trace/story/<book>` (`/trace/story/shelf` for the book picker).
 
