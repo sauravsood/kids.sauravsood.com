@@ -42,6 +42,8 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - Animal outlines are original drawings in `public/trace/animals.js` (1000 × 1000 viewBox).
 - Add it to the iPad home screen for full-screen use. The manifest's `start_url` and `scope` are `/trace/`, so anyone who added Trace before it moved needs to add it again.
 - Old links from when Trace lived at `/` (for example `/#history` or `/#d/12`) are sent on to `/trace/#…` by a small script at the top of the hub page, because hashes never reach the server.
+- **Works offline.** `public/trace/sw.js` (a service worker) keeps the page, code, outlines and icons on the device: network first with a 2.5 s wait, cache otherwise. Add any new file Trace needs to its `FILES` list and bump `VERSION`.
+- **Saves on the device, syncs later.** Drawings go to IndexedDB first (`local.js`), keyed by an id made on the device and by account, so two grown-ups on one iPad stay apart. `sync.js` sends changes (`PUT`/`DELETE /api/drawings/c/<id>`, newest edit wins, safe to repeat) and pulls drawings from other devices (`GET /api/drawings?meta=1`, then `?ids=…`). It runs after each save, every 30 s, when the internet comes back and when the app is reopened. Time spent and name changes wait in `localStorage` and are sent with the day they happened. A cloud-with-a-line icon in the top bar means "offline, saved here". Signing in and out need the internet.
 
 ## Music Lab (`/music/`)
 
@@ -99,7 +101,7 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - **Pocket Money:** a grown-up adds coins to a tray, the child taps a jar (Save, Spend, Share) to drop each coin in, and the Save jar counts towards one goal with a picture. Coins are whole numbers with no currency.
 - **My Routines:** a grown-up picks from a set of picture routines, the child taps a card when it's done. "This week" shows what was done, with no streaks, scores or marks for missed days. Done marks older than 60 days are dropped.
 - Grown-up parts (adding or removing coins, choosing routines) sit behind the same sum check as outside links: `window.askGrownUp(text)` from `public/shared/grownup.js`.
-- Both use the same Google sign-in and session as Trace through `public/shared/account.js` (`signedIn()`, `loadState(app)`, `saveState(app, data)`). Each app saves one JSON document per account in the D1 table `app_state` through `GET`/`PUT /api/state/<app>` (`money` or `routines`, up to 100 KB, last write wins).
+- Both use the same Google / Apple sign-in and session as Trace through `public/shared/account.js` (`signedIn()`, `loadState(app)`, `saveState(app, data)`). Each app saves one JSON document per account in the D1 table `app_state` through `GET`/`PUT /api/state/<app>` (`money` or `routines`, up to 100 KB, last write wins).
 
 ## Licences
 
@@ -122,7 +124,9 @@ npx wrangler dev
 
 Deployed by Cloudflare Workers Builds from `main` with `npx wrangler deploy`. `wrangler.jsonc` serves `public/` as static files and runs `src/worker.js` for `/api/*` only.
 
-- **Database:** Cloudflare D1 (`kids`), bound as `DB`. The Worker creates its tables on first use (`users`, `sessions`, `drawings`, `usage`, `app_state`).
+- **Database:** Cloudflare D1 (`kids`), bound as `DB`. The Worker creates its tables on first use (`users`, `identities`, `sessions`, `drawings`, `usage`, `app_state`) and adds `drawings.client_id` to older databases.
+- **Apple sign-in:** web flow with no Apple script and no Apple private key. `public/shared/apple.js` sets a short `apple_state` cookie and sends the browser to Apple; Apple posts back to `/api/auth/apple/callback`, which checks the ID token against Apple's public keys (audience = the Services ID, nonce = the cookie), starts the session and returns to the app that asked. The Services ID goes in `APPLE_CLIENT_ID` in `wrangler.jsonc` (empty hides the button). In the Apple Developer account the Services ID needs domain `kids.sauravsood.com` and return URL `https://kids.sauravsood.com/api/auth/apple/callback`.
+- **One account, two sign-ins:** a new sign-in whose provider says the email is verified joins the existing account with that email (table `identities`), so Google on one device and Apple on another see the same drawings. Apple's "Hide my email" relay addresses won't match, so those get their own account.
 - **Google sign-in:** a Google OAuth *Web application* client with `https://kids.sauravsood.com` as an authorised JavaScript origin. Its client ID goes in `GOOGLE_CLIENT_ID` in `wrangler.jsonc`. Trace moving to `/trace/` doesn't change the origin, so nothing changes here.
 - Sessions are random tokens in an HttpOnly cookie (`Path=/`), stored hashed in D1.
 - **Analytics:** every page carries GA4 `G-K71K5101R8` with Google signals and ad personalisation off. Trace sends its own `page_view` per screen with readable paths (`/trace/history`, `/trace/draw/<animal>`, `/trace/drawing/view` with no drawing ids), so GA4's "page changes based on browser history events" setting should stay off.

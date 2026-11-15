@@ -1,10 +1,12 @@
 // Shared by the apps that save to the family's account (Pocket Money,
-// My Routines). Uses the same Google sign-in and session cookie as Trace.
+// My Routines). Uses the same Google / Apple sign-in and session cookie as Trace.
 //
 //   import { signedIn, loadState, saveState } from "/shared/account.js";
 //   await signedIn();                    // shows a sign-in panel if needed
 //   const data = await loadState("money");
 //   saveState("money", data);            // saves a moment later, last write wins
+
+import { appleButton, appleSignInFailed } from "/shared/apple.js";
 
 export async function api(path, { method = "GET", data, keepalive = false } = {}) {
   const res = await fetch(path, {
@@ -43,15 +45,17 @@ export async function signedIn() {
   } catch (err) {
     if (err.status !== 401) throw err;
   }
-  const config = await api("/api/config").catch(() => ({ googleClientId: null, devLogin: false }));
+  const config = await api("/api/config").catch(() => ({ googleClientId: null, appleClientId: null, devLogin: false }));
+  const appleFailed = appleSignInFailed();
   return new Promise((resolve) => {
     const panel = document.createElement("div");
     panel.className = "signin-panel";
     panel.innerHTML = `
       <div class="signin-card">
         <h2>Grown-ups: sign in</h2>
-        <p class="signin-note">Sign in with Google to keep this saved. It's the same sign-in as Trace.</p>
+        <p class="signin-note">Sign in to keep this saved. It's the same sign-in as Trace.</p>
         <div class="signin-google"></div>
+        <div class="signin-apple"></div>
         <button class="signin-dev" hidden>Dev sign-in</button>
       </div>`;
     document.body.appendChild(panel);
@@ -65,11 +69,13 @@ export async function signedIn() {
         note.textContent = "That didn't work. Please try again.";
       }
     };
+    if (appleFailed) note.textContent = "That didn't work. Please try again.";
+    if (config.appleClientId) panel.querySelector(".signin-apple").appendChild(appleButton(config.appleClientId));
     const dev = panel.querySelector(".signin-dev");
     dev.hidden = !config.devLogin;
     dev.addEventListener("click", () => finish(api("/api/auth/dev", { method: "POST", data: { email: "dev@example.com" } })));
     if (!config.googleClientId) {
-      if (!config.devLogin) note.textContent = "Sign-in isn't set up yet.";
+      if (!config.devLogin && !config.appleClientId) note.textContent = "Sign-in isn't set up yet.";
       return;
     }
     loadGoogle().then(() => {

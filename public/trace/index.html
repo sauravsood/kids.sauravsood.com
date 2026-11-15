@@ -43,6 +43,9 @@
       <span id="who-name" class="who-name"></span>
     </button>
     <div class="stats" aria-label="Stats">
+      <span id="offline" class="stat offline" title="No internet. Drawings are kept on this device and sent later." aria-label="Offline" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18.5 H17 A4 4 0 0 0 18 10.6 A6 6 0 0 0 6.6 9 A4.8 4.8 0 0 0 7 18.5 Z M3.5 3.5 L20.5 20.5"/></svg>
+      </span>
       <span class="stat" title="Drawings">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20 L15 5 L19 8 L8 23 Z" transform="translate(0 -2)"/></svg>
         <b id="stat-drawings">0</b>
@@ -72,6 +75,7 @@
       <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><path d="M14 50 L40 14 L50 22 L24 58 L12 60 Z" fill="#ff9f1c"/><path d="M40 14 L44 8 L54 16 L50 22 Z" fill="#ff4d6d"/><path d="M14 50 L24 58 L12 60 Z" fill="#3a3f4b"/></svg>
       <h1>Trace</h1>
       <div id="google-btn" class="google-btn"></div>
+      <div id="apple-btn" class="apple-slot"></div>
       <button id="dev-login" class="pill" hidden>Dev sign-in</button>
       <p id="signin-note" class="note">Grown-ups: sign in to save drawings.</p>
     </div>

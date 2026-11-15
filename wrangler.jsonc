@@ -1,6 +1,6 @@
 {
   // Kids hub: static pages in public/ (hub, Trace, Planetarium, 3D Dino), plus
-  // a small API Worker for Trace's sign-in,
+  // a small API Worker for Google/Apple sign-in,
   // saved drawings and stats. Only /api/* runs the Worker; everything else
   // is served straight from public/.
   "name": "kids-sauravsood-com",
@@ -36,6 +36,10 @@
   "vars": {
     // OAuth "Web application" client from Google Cloud Console. Not a secret.
     "GOOGLE_CLIENT_ID": "250113524401-7vmhm9ffv7nb73aa8i0v070mj3n6jspi.apps.googleusercontent.com",
+    // Sign in with Apple: the Services ID from developer.apple.com (not a secret).
+    // Empty hides the Apple button. Return URL to register with Apple:
+    // https://kids.sauravsood.com/api/auth/apple/callback
+    "APPLE_CLIENT_ID": "",
     // Feedback bubble: PRIVATE repo that new feedback is filed in as issues.
     // Only used once the secret FEEDBACK_GITHUB_TOKEN is set on the Worker.
     "FEEDBACK_GITHUB_REPO": "sauravsood/site-feedback"
