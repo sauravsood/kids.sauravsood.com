@@ -553,14 +553,16 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
 .story-close { position: absolute; top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); z-index: 3; }
 
 .story-shelf-view, .story-book-view { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
-.story[data-view="shelf"] .story-shelf-view { display: flex; }
+.story[data-view="shelf"] .story-shelf-view { display: flex; justify-content: flex-start; overflow-y: auto; padding: 20px 0 30px; }
+.story-shelf-view > * { flex: none; }
 .story[data-view="page"] .story-book-view { display: flex; }
 
 .story-me { width: min(200px, 28vh); aspect-ratio: 1; object-fit: contain; animation: breathe-img 4s ease-in-out infinite alternate; }
 @keyframes breathe-img { to { transform: scale(1.05) rotate(2deg); } }
-.shelf { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
+.shelf { list-style: none; margin: 0; padding: 0 8px; display: flex; flex-wrap: wrap; justify-content: center; gap: 24px 20px; max-width: 1100px; }
 .book-cover {
-  width: min(230px, 40vw);
+  width: min(190px, 40vw);
+  height: 100%;
   border: 0;
   border-radius: 10px 24px 24px 10px;
   border-left: 12px solid rgba(58, 63, 75, 0.25);
@@ -573,12 +575,16 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
   cursor: pointer;
   box-shadow: 0 6px 0 rgba(58, 63, 75, 0.12);
 }
-.shelf li:nth-child(1) .book-cover { background: #e4e8ff; }
-.shelf li:nth-child(2) .book-cover { background: #dff4ff; }
-.shelf li:nth-child(3) .book-cover { background: #fff3cf; }
+.shelf li:nth-child(4n+1) .book-cover { background: #e4e8ff; }
+.shelf li:nth-child(4n+2) .book-cover { background: #dff4ff; }
+.shelf li:nth-child(4n+3) .book-cover { background: #fff3cf; }
+.shelf li:nth-child(4n+4) .book-cover { background: #e6f6dc; }
+.book-cover { position: relative; }
+.book-cover.matched { outline: 4px solid var(--accent); outline-offset: 3px; }
+.book-me { position: absolute; top: -18px; right: -14px; width: 64px; height: 64px; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.2)); }
 .book-cover:active { transform: translateY(4px); }
 .book-cover svg { width: 62%; aspect-ratio: 1; }
-.book-title { font-size: 21px; font-weight: 800; text-align: center; line-height: 1.15; }
+.book-title { font-size: 19px; font-weight: 800; text-align: center; line-height: 1.15; }
 .book-credit { font-size: 13px; color: var(--muted); }
 
 .story-pages {
@@ -671,4 +677,58 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
 }
 @media (prefers-reduced-motion: reduce) {
   .story svg *, .story-page, .story-me { animation-duration: 0.01s !important; animation-iteration-count: 1 !important; }
+}
+
+/* More books */
+.bag-pop { animation: bag-pop 0.9s cubic-bezier(.3, 1.4, .5, 1) both; transform-box: fill-box; transform-origin: center bottom; }
+.pop-in { animation: bag-pop 0.8s cubic-bezier(.3, 1.4, .5, 1) both; transform-box: fill-box; transform-origin: center bottom; }
+.slide-left { animation: slide-left 3s ease-in-out 0.6s both; }
+.slide-right { animation: slide-right 3s ease-in-out 0.6s both; }
+.carry { animation: carry 5s ease-in-out 0.6s both; }
+.walk-right { animation: walk-right 6s ease-in-out 0.4s both; }
+.hop-home { animation: hop-home 6s ease-in-out 0.6s both; }
+.fly-left { animation: fly-left 4s ease-in-out 0.6s both; }
+.fly-right { animation: fly-right 4s ease-in-out 1s both; }
+.back-left { animation: fly-left 4s ease-in-out 0.4s reverse both; }
+.back-right { animation: fly-right 4s ease-in-out 0.8s reverse both; }
+.drift-short { animation: drift-short 8s ease-in-out 0.4s both; }
+.swim { animation: swim 4s ease-in-out infinite alternate; }
+.leap { animation: leap 3.4s ease-in-out 0.6s both; }
+.trot { animation: trot 6s ease-in-out 0.4s both; }
+.notes > g > g { animation: zzz 3.6s ease-in-out infinite; opacity: 0; }
+.jingle { animation: giggle 1.4s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center top; }
+.story svg .self { transform-box: fill-box; transform-origin: center bottom; }
+@keyframes bag-pop { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes slide-left { to { transform: translateX(-200px); } }
+@keyframes slide-right { to { transform: translateX(360px); } }
+@keyframes carry {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(380px, -40px); }
+  100% { transform: translate(720px, -10px); }
+}
+@keyframes walk-right {
+  0% { transform: translate(0, 0); } 10% { transform: translate(60px, -30px); } 20% { transform: translate(120px, 0); }
+  30% { transform: translate(180px, -30px); } 40% { transform: translate(240px, 0); } 50% { transform: translate(300px, -30px); }
+  60% { transform: translate(360px, 0); } 70% { transform: translate(420px, -30px); } 80% { transform: translate(480px, 0); }
+  90% { transform: translate(540px, -30px); } 100% { transform: translate(600px, 0); }
+}
+@keyframes hop-home {
+  0% { transform: translate(0, 0); } 10% { transform: translate(90px, -110px); } 20% { transform: translate(180px, 0); }
+  30% { transform: translate(270px, -110px); } 40% { transform: translate(360px, 0); } 50% { transform: translate(450px, -110px); }
+  60% { transform: translate(540px, 0); } 70% { transform: translate(630px, -110px); } 80% { transform: translate(720px, 0); }
+  90% { transform: translate(810px, -110px); } 100% { transform: translate(900px, 0); }
+}
+@keyframes fly-left { to { transform: translate(-700px, -700px) rotate(-12deg); } }
+@keyframes fly-right { to { transform: translate(700px, -700px) rotate(12deg); } }
+@keyframes drift-short { to { transform: translateX(400px); } }
+@keyframes swim { from { transform: translateX(-40px) rotate(-3deg); } to { transform: translateX(40px) rotate(3deg); } }
+@keyframes leap {
+  0% { transform: translate(0, 0) rotate(0); }
+  50% { transform: translate(300px, -380px) rotate(-15deg); }
+  100% { transform: translate(600px, 0) rotate(10deg); }
+}
+@keyframes trot {
+  0% { transform: translate(0, 0); } 12.5% { transform: translate(90px, -50px); } 25% { transform: translate(180px, 0); }
+  37.5% { transform: translate(270px, -50px); } 50% { transform: translate(360px, 0); } 62.5% { transform: translate(450px, -50px); }
+  75% { transform: translate(540px, 0); } 87.5% { transform: translate(630px, -50px); } 100% { transform: translate(720px, 0); }
 }

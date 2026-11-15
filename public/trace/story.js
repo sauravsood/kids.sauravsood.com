@@ -5,7 +5,7 @@
 // slow move and then the animal just breathes, there's no sound, and the
 // book ends with "The end" as a natural stopping point.
 
-import { ANIMALS } from "./animals.js";
+import { ANIMALS, CATEGORIES } from "./animals.js";
 
 const W = 1600;
 const H = 1000;
@@ -15,7 +15,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 
 // A built-in outline as a little prop in a scene.
 function prop(id, x, y, size, cls = "") {
-  const a = ANIMALS.find((item) => item.id === id);
+  const a = ANIMALS.find((item) => item.id === id) || CATEGORIES.find((item) => item.id === id);
   if (!a) return "";
   return `<g transform="translate(${x - size / 2} ${y - size / 2}) scale(${size / 1000})"><g class="prop ${cls}">${a.shapes.join("")}</g></g>`;
 }
@@ -144,6 +144,208 @@ export const BOOKS = [
   },
 ];
 
+
+// ---------- More props ----------
+
+const INK = `stroke="#3a3f4b" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"`;
+const fence = (y = 760) => {
+  let posts = "";
+  for (let x = 40; x < W; x += 160) posts += `<path d="M${x} ${y + 90} L${x} ${y - 40} L${x + 20} ${y - 60} L${x + 40} ${y - 40} L${x + 40} ${y + 90} Z" fill="#f4e1c1" ${INK}/>`;
+  return `<path d="M0 ${y - 10} H${W} M0 ${y + 40} H${W}" stroke="#3a3f4b" stroke-width="14"/><path d="M0 ${y - 10} H${W} M0 ${y + 40} H${W}" stroke="#f4e1c1" stroke-width="6"/>${posts}`;
+};
+const sack = (x, y, s = 1, cls = "", delay = 0) => `<g transform="translate(${x} ${y}) scale(${s})"><g class="${cls}" style="animation-delay:${delay}s">
+  <path d="M-60 60 C-80 0 -50 -50 -20 -60 L20 -60 C50 -50 80 0 60 60 Q0 80 -60 60 Z" fill="#f6e7c8" ${INK}/>
+  <path d="M-25 -60 L-35 -85 M25 -60 L35 -85 M-28 -62 Q0 -50 28 -62" fill="none" ${INK}/>
+  <path d="M-30 10 Q-20 0 -10 10 Q0 0 10 10 Q20 0 30 10" fill="none" stroke="#c9b48a" stroke-width="5" stroke-linecap="round"/></g></g>`;
+const house = (x, y, s = 1) => `<g transform="translate(${x} ${y}) scale(${s})">
+  <path d="M-110 0 L-110 -150 L110 -150 L110 0 Z" fill="#fff3e0" ${INK}/>
+  <path d="M-140 -140 L0 -260 L140 -140 Z" fill="#ff8a7a" ${INK}/>
+  <path d="M-30 0 L-30 -80 L30 -80 L30 0" fill="#c98b5a" ${INK}/>
+  <rect x="50" y="-125" width="40" height="40" fill="#bfe6ff" ${INK}/></g>`;
+const stall = (x, y) => `<g transform="translate(${x} ${y})">
+  <path d="M-150 0 L-150 -170 M150 0 L150 -170" ${INK}/><rect x="-160" y="-90" width="320" height="90" fill="#f4e1c1" ${INK}/>
+  <path d="M-180 -170 L180 -170 L160 -230 L-160 -230 Z" fill="#fff" ${INK}/>
+  <path d="M-120 -230 L-130 -170 M-40 -230 L-45 -170 M40 -230 L45 -170 M120 -230 L130 -170" stroke="#ff4d6d" stroke-width="24"/>
+  <circle cx="-90" cy="-110" r="26" fill="#ff4d4d" ${INK}/><circle cx="-30" cy="-110" r="26" fill="#ffd60a" ${INK}/><circle cx="30" cy="-110" r="26" fill="#7ed957" ${INK}/><circle cx="90" cy="-110" r="26" fill="#ff9f1c" ${INK}/></g>`;
+const table = (x, y, full) => `<g transform="translate(${x} ${y})">
+  <rect x="-170" y="-20" width="340" height="30" rx="10" fill="#c98b5a" ${INK}/><path d="M-140 10 L-140 120 M140 10 L140 120" ${INK} stroke-width="12"/>
+  <ellipse cx="0" cy="-30" rx="110" ry="26" fill="#fff" ${INK}/>
+  ${full ? `<ellipse cx="0" cy="-58" rx="62" ry="34" fill="#b5653a" ${INK}/><path d="M-30 -70 Q0 -80 30 -70" fill="none" stroke="#e7a77a" stroke-width="6" stroke-linecap="round"/>` : ""}</g>`;
+const bubble = (x, y, text, cls = "pop-in", delay = 0) => `<g transform="translate(${x} ${y})"><g class="${cls}" style="animation-delay:${delay}s">
+  <rect x="${-Math.max(110, text.length * 17 + 50)}" y="-60" width="${2 * Math.max(110, text.length * 17 + 50)}" height="110" rx="55" fill="#fff" ${INK}/><path d="M-20 48 L-40 95 L20 48" fill="#fff" ${INK}/><path d="M-18 46 L18 46" stroke="#fff" stroke-width="10"/>
+  <text x="0" y="16" text-anchor="middle" font-size="54" font-weight="800" fill="#3a3f4b">${esc(text)}</text></g></g>`;
+const brickWall = (y) => {
+  let bricks = "";
+  for (let row = 0; row < 4; row++) {
+    for (let x = row % 2 ? -60 : 0; x < W; x += 120) bricks += `<rect x="${x}" y="${y + row * 55}" width="120" height="55" fill="#d9825b" ${INK}/>`;
+  }
+  return `<rect x="0" y="${y}" width="${W}" height="${H - y}" fill="#c4704b"/>${bricks}`;
+};
+const honey = (x, y) => `<g transform="translate(${x} ${y})"><path d="M-55 -50 L55 -50 C75 0 70 50 0 60 C-70 50 -75 0 -55 -50 Z" fill="#ffc94d" ${INK}/>
+  <rect x="-62" y="-72" width="124" height="26" rx="10" fill="#c98b5a" ${INK}/><text x="0" y="20" text-anchor="middle" font-size="34" font-weight="800" fill="#8a5a00">honey</text></g>`;
+const greenBoat = (x, y, img, friends = "") => `<g transform="translate(${x} ${y})"><g class="idle rock">
+  <g transform="translate(-90 -140)"><image href="${img.url}" x="-140" y="-140" width="280" height="280" preserveAspectRatio="xMidYMid meet"/></g>
+  ${friends}
+  <path d="M-320 -20 L320 -20 L240 110 L-240 110 Z" fill="#9ccc65" ${INK} stroke-width="8"/><path d="M-290 25 L290 25" ${INK}/>
+  <path d="M60 -20 L60 -330" ${INK} stroke-width="10"/><path d="M70 -320 L250 -60 L70 -60 Z" fill="#fff" ${INK}/></g></g>`;
+const stoneCross = (x, y) => `<g transform="translate(${x} ${y})"><path d="M-70 0 L70 0 L50 -60 L-50 -60 Z" fill="#d8d3c8" ${INK}/>
+  <path d="M-18 -60 L-18 -200 L-60 -200 L-60 -240 L-18 -240 L-18 -280 L18 -280 L18 -240 L60 -240 L60 -200 L18 -200 L18 -60 Z" fill="#e8e3d8" ${INK}/></g>`;
+const notes = (x, y) => `<g class="notes" fill="#3a3f4b">${[0, 1, 2].map((i) => `<g transform="translate(${x + i * 90} ${y - i * 40})"><g style="animation-delay:${i * 1.2}s"><ellipse cx="0" cy="0" rx="22" ry="16"/><path d="M20 -2 L20 -80 L50 -66" fill="none" stroke="#3a3f4b" stroke-width="8" stroke-linecap="round"/></g></g>`).join("")}</g>`;
+const bells = (x, y) => `<g transform="translate(${x} ${y})"><g class="jingle">${[-120, 0, 120].map((dx) => `<g transform="translate(${dx} 0)"><path d="M-26 20 C-26 -20 -16 -34 0 -34 C16 -34 26 -20 26 20 Z" fill="#ffd60a" ${INK}/><circle cx="0" cy="26" r="8" fill="#3a3f4b"/></g>`).join("")}</g></g>`;
+const sun = (x, y, r = 90) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#ffd60a" stroke="#3a3f4b" stroke-width="6"/>`;
+const farmDay = (extra = "") => `${daySky}${sun(1380, 170)}${cloud(380, 190, 0.8)}${hill("#9fd17f")}${extra}`;
+
+// "a cow", "an owl", or "Mia’s animal".
+function aName(animal, kidName) {
+  if (animal.mine) return kidName ? `${kidName}’s animal` : "my animal";
+  const n = animal.name.toLowerCase();
+  return `${/^[aeiou]/.test(n) ? "an" : "a"} ${n}`;
+}
+const SOUNDS = {
+  cow: "moo", horse: "neigh", pig: "oink", sheep: "baa", chicken: "cluck", dog: "woof", cat: "meow",
+  owl: "hoo", bee: "buzz", bird: "tweet", lion: "roar", elephant: "toot", trex: "roar", hippo: "grunt",
+  whale: "whoosh", beluga: "whoosh", dolphin: "click", zebra: "neigh", giraffe: "hum",
+};
+const sound = (animal) => SOUNDS[animal.id] || "la";
+
+const MORE_BOOKS = [
+  {
+    id: "baa",
+    title: "Baa, Baa, Black Sheep",
+    credit: "Traditional nursery rhyme",
+    for: ["sheep"],
+    cover: `<path d="M20 70 C10 50 25 30 40 34 C45 18 65 20 68 34 C85 32 92 52 82 68 Z" fill="#fff" stroke="#3a3f4b" stroke-width="3"/><rect x="34" y="66" width="6" height="14" fill="#3a3f4b"/><rect x="60" y="66" width="6" height="14" fill="#3a3f4b"/>`,
+    pages: [
+      { text: () => "Baa, baa, black sheep, have you any wool?",
+        scene: (img) => `${farmDay(fence())}${actor(img, 800, 700, 360, "", "sway")}` },
+      { text: () => "Yes sir, yes sir, three bags full;",
+        scene: (img) => `${farmDay(fence())}${actor(img, 520, 700, 340, "", "breathe")}${sack(900, 800, 1.2, "bag-pop", 0.4)}${sack(1080, 800, 1.2, "bag-pop", 1)}${sack(1260, 800, 1.2, "bag-pop", 1.6)}` },
+      { text: () => "One for the master, and one for the dame,",
+        scene: (img) => `${farmDay(fence())}${house(260, 790, 0.9)}${actor(img, 800, 700, 320, "", "sway")}<g class="slide-left">${sack(560, 820, 1.1)}</g><g class="slide-right">${sack(1040, 820, 1.1)}</g>` },
+      { text: () => "And one for the little boy who lives down the lane.",
+        scene: (img) => `${farmDay()}${house(1340, 800, 0.85)}${actor(img, 380, 700, 320, "", "breathe")}<g class="carry">${sack(560, 820, 1.1)}</g>` },
+    ],
+  },
+  {
+    id: "piggy",
+    title: "This Little Piggy",
+    credit: "Traditional nursery rhyme",
+    for: ["pig"],
+    cover: `<circle cx="50" cy="52" r="30" fill="#ffc1cf" stroke="#3a3f4b" stroke-width="3"/><ellipse cx="50" cy="60" rx="12" ry="9" fill="#ff9fb4" stroke="#3a3f4b" stroke-width="3"/><circle cx="40" cy="44" r="3"/><circle cx="60" cy="44" r="3"/>`,
+    pages: [
+      { text: () => "This little piggy went to market,",
+        scene: (img) => `${farmDay()}${stall(1250, 820)}${actor(img, 300, 720, 300, "walk-right", "breathe")}` },
+      { text: () => "This little piggy stayed home,",
+        scene: (img) => `${farmDay()}${house(560, 820, 1.2)}${actor(img, 1000, 720, 300, "", "sway")}` },
+      { text: () => "This little piggy had roast beef,",
+        scene: (img) => `${farmDay()}${table(880, 800, true)}${actor(img, 520, 700, 300, "", "breathe")}` },
+      { text: () => "This little piggy had none,",
+        scene: (img) => `${farmDay()}${table(880, 800, false)}${actor(img, 520, 700, 300, "", "sway")}` },
+      { text: () => "And this little piggy cried “Wee, wee, wee!” all the way home.",
+        scene: (img) => `${farmDay()}${house(1350, 820, 0.9)}${actor(img, 260, 720, 280, "hop-home", "breathe")}${bubble(380, 420, "wee!", "pop-in", 0.6)}` },
+    ],
+  },
+  {
+    id: "macdonald",
+    title: "Old MacDonald Had a Farm",
+    credit: "Traditional song",
+    for: ["cow", "horse", "pig", "sheep", "chicken"],
+    cover: `<path d="M20 82 L20 46 L50 22 L80 46 L80 82 Z" fill="#ff8a7a" stroke="#3a3f4b" stroke-width="3" stroke-linejoin="round"/><path d="M40 82 L40 60 L60 60 L60 82" fill="#fff" stroke="#3a3f4b" stroke-width="3"/>`,
+    pages: [
+      { text: () => "Old MacDonald had a farm, E-I-E-I-O!",
+        scene: (img) => `${farmDay()}${prop("farm", 1150, 640, 460)}${actor(img, 480, 700, 320, "", "sway")}` },
+      { text: (a, k) => `And on that farm he had ${aName(a, k)}, E-I-E-I-O!`,
+        scene: (img) => `${farmDay()}${prop("farm", 1250, 640, 380)}${actor(img, 700, 720, 340, "hop3", "breathe")}` },
+      { text: (a) => `With a ${sound(a)}-${sound(a)} here, and a ${sound(a)}-${sound(a)} there,`,
+        scene: (img, a) => `${farmDay()}${actor(img, 800, 720, 340, "", "sway")}${bubble(420, 380, `${sound(a)}-${sound(a)}`, "pop-in", 0.4)}${bubble(1180, 380, `${sound(a)}-${sound(a)}`, "pop-in", 1.6)}` },
+      { text: (a) => `Here a ${sound(a)}, there a ${sound(a)}, everywhere a ${sound(a)}-${sound(a)}!`,
+        scene: (img, a) => `${farmDay()}${actor(img, 800, 740, 320, "", "breathe")}${[[300, 300], [800, 260], [1300, 300], [480, 560], [1120, 560]].map(([x, y], i) => bubble(x, y, sound(a), "pop-in", 0.3 + i * 0.6)).join("")}` },
+      { text: () => "Old MacDonald had a farm, E-I-E-I-O!",
+        scene: (img) => `${daySky}${sun(1350, 250, 110)}${hill("#9fd17f")}${prop("farm", 1100, 640, 420)}${actor(img, 480, 700, 320, "", "breathe-slow")}` },
+    ],
+  },
+  {
+    id: "dickie",
+    title: "Two Little Dickie Birds",
+    credit: "Traditional nursery rhyme",
+    for: ["bird", "owl", "butterfly", "bee", "chicken"],
+    cover: `<rect x="10" y="62" width="80" height="26" fill="#d9825b" stroke="#3a3f4b" stroke-width="3"/><circle cx="34" cy="50" r="12" fill="#3ec5ff" stroke="#3a3f4b" stroke-width="3"/><circle cx="66" cy="50" r="12" fill="#ffd60a" stroke="#3a3f4b" stroke-width="3"/>`,
+    pages: [
+      { text: () => "Two little dickie birds sitting on a wall;",
+        scene: (img) => `${daySky}${cloud(300, 200, 0.7)}${brickWall(720)}${actor(img, 560, 580, 280, "", "breathe")}${actor(img, 1040, 580, 280, "", "breathe", true)}` },
+      { text: () => "One named Peter, one named Paul.",
+        scene: (img) => `${daySky}${cloud(1200, 180, 0.7)}${brickWall(720)}${actor(img, 560, 580, 280, "", "sway")}${actor(img, 1040, 580, 280, "", "sway", true)}${bubble(560, 300, "Peter", "pop-in", 0.4)}${bubble(1040, 300, "Paul", "pop-in", 1.4)}` },
+      { text: () => "Fly away, Peter! Fly away, Paul!",
+        scene: (img) => `${daySky}${cloud(800, 200, 0.7)}${brickWall(720)}${actor(img, 560, 580, 280, "fly-left", "breathe")}${actor(img, 1040, 580, 280, "fly-right", "breathe", true)}` },
+      { text: () => "Come back, Peter! Come back, Paul!",
+        scene: (img) => `${daySky}${cloud(800, 200, 0.7)}${brickWall(720)}${actor(img, 560, 580, 280, "back-left", "breathe")}${actor(img, 1040, 580, 280, "back-right", "breathe", true)}` },
+    ],
+  },
+  {
+    id: "owlcat",
+    title: "The Owl and the Pussy-cat",
+    credit: "Edward Lear, 1871",
+    for: ["owl", "cat"],
+    cover: `<path d="M14 64 L86 64 L74 84 L26 84 Z" fill="#9ccc65" stroke="#3a3f4b" stroke-width="3" stroke-linejoin="round"/><circle cx="38" cy="50" r="12" fill="#fff" stroke="#3a3f4b" stroke-width="3"/><circle cx="64" cy="50" r="12" fill="#fff" stroke="#3a3f4b" stroke-width="3"/><circle cx="78" cy="20" r="8" fill="#fff4c2" stroke="#3a3f4b" stroke-width="3"/>`,
+    pages: [
+      { text: () => "The Owl and the Pussy-cat went to sea in a beautiful pea-green boat.",
+        scene: (img, a) => `${daySky}${sun(1350, 180)}${water}${greenBoat(800, 760, img, friendsFor(a))}` },
+      { text: () => "They took some honey, and plenty of money, wrapped up in a five-pound note.",
+        scene: (img, a) => `${daySky}${cloud(300, 200, 0.7)}${water}<g class="move drift-short">${greenBoat(600, 760, img, `${friendsFor(a)}<g transform="translate(200 -90)">${honey(0, 0)}</g>`)}</g>` },
+      { text: () => "The Owl looked up to the stars above, and sang to a small guitar.",
+        scene: (img, a) => `${nightSky(31)}${moon(1300, 200, 80)}<rect x="0" y="720" width="${W}" height="${H - 720}" fill="#3f6f9a" stroke="#3a3f4b" stroke-width="6"/>${greenBoat(760, 770, img, friendsFor(a))}${notes(1000, 420)}` },
+      { text: () => "And hand in hand, on the edge of the sand, they danced by the light of the moon.",
+        scene: (img, a) => `${nightSky(33)}${moon(800, 220, 120)}<path d="M-50 1050 L-50 800 Q800 740 1650 800 L1650 1050 Z" fill="#f2d99a" stroke="#3a3f4b" stroke-width="6"/>${actor(img, 600, 680, 300, "", "sway")}${a.id === "owl" ? `<g class="idle sway self">${prop("cat", 1000, 690, 280)}</g>` : a.id === "cat" ? `<g class="idle sway self">${prop("owl", 1000, 690, 280)}</g>` : `<g class="idle sway self">${prop("owl", 950, 700, 240)}${prop("cat", 1230, 700, 240)}</g>`}` },
+    ],
+  },
+  {
+    id: "fishalive",
+    title: "One, Two, Three, Four, Five",
+    credit: "Traditional counting rhyme",
+    for: ["fish", "shark", "hammerhead", "sawshark", "dolphin", "whale", "beluga", "octopus", "jellyfish", "crab", "starfish", "turtle"],
+    cover: `<rect x="8" y="50" width="84" height="40" fill="#8fd3f4" stroke="#3a3f4b" stroke-width="3"/><path d="M30 66 C42 54 62 54 70 66 C62 78 42 78 30 66 Z M70 66 L82 58 L82 74 Z" fill="#ff9f1c" stroke="#3a3f4b" stroke-width="3" stroke-linejoin="round"/><text x="50" y="36" text-anchor="middle" font-size="22" font-weight="800">1 2 3</text>`,
+    pages: [
+      { text: () => "One, two, three, four, five, once I caught a fish alive;",
+        scene: (img) => `${daySky}${sun(250, 170, 80)}${water}${actor(img, 800, 820, 300, "", "swim")}` },
+      { text: () => "Six, seven, eight, nine, ten, then I let it go again.",
+        scene: (img) => `${daySky}${cloud(1200, 180, 0.7)}${water}${actor(img, 500, 840, 280, "leap", "breathe")}` },
+      { text: () => "Why did you let it go? Because it bit my finger so.",
+        scene: (img) => `${daySky}${sun(1350, 170, 80)}${water}${actor(img, 700, 830, 280, "drift-short", "swim")}` },
+    ],
+  },
+  {
+    id: "banbury",
+    title: "Ride a Cock-Horse",
+    credit: "Traditional nursery rhyme",
+    for: ["horse", "zebra"],
+    cover: `<path d="M40 86 L60 86 L56 74 L44 74 Z M46 74 L46 30 M54 74 L54 30 M34 44 L66 44" fill="#e8e3d8" stroke="#3a3f4b" stroke-width="3" stroke-linejoin="round"/>`,
+    pages: [
+      { text: () => "Ride a cock-horse to Banbury Cross,",
+        scene: (img) => `${daySky}${cloud(500, 200, 0.7)}${hill("#9fd17f")}${stoneCross(1300, 780)}${actor(img, 280, 700, 300, "trot", "breathe")}` },
+      { text: () => "To see a fine lady upon a white horse;",
+        scene: (img) => `${daySky}${sun(1350, 170, 80)}${hill("#9fd17f")}${stoneCross(800, 760)}${prop("horse", 1200, 680, 300)}${actor(img, 420, 700, 300, "", "sway")}` },
+      { text: () => "Rings on her fingers and bells on her toes,",
+        scene: (img) => `${daySky}${cloud(1200, 200, 0.7)}${hill("#9fd17f")}${actor(img, 800, 680, 340, "", "breathe")}${bells(800, 900)}` },
+      { text: () => "She shall have music wherever she goes.",
+        scene: (img) => `${daySky}${sun(300, 180, 80)}${hill("#9fd17f")}${actor(img, 700, 700, 320, "", "sway")}${notes(950, 420)}` },
+    ],
+  },
+];
+
+// The other of the Owl and the Pussy-cat rides along in the boat.
+function friendsFor(a) {
+  const ride = (id) => `<g transform="translate(-120 -260) scale(0.24)"><g class="prop">${(ANIMALS.find((x) => x.id === id) || { shapes: [] }).shapes.join("")}</g></g>`;
+  if (a.id === "owl") return `<g transform="translate(230 0)">${ride("cat")}</g>`;
+  if (a.id === "cat") return `<g transform="translate(230 0)">${ride("owl")}</g>`;
+  return `<g transform="translate(230 0)">${ride("owl")}</g><g transform="translate(-260 0)">${ride("cat")}</g>`;
+}
+
+BOOKS.push(...MORE_BOOKS);
+for (const b of BOOKS) b.for ??= [];
+BOOKS.find((b) => b.id === "diddle").for.push("cow", "cat", "dog");
+BOOKS.find((b) => b.id === "boat").for.push("turtle", "dolphin");
+BOOKS.find((b) => b.id === "star").for.push("owl", "butterfly", "bird");
+
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // ---------- The book ----------
@@ -169,8 +371,14 @@ function showShelf() {
   current.book = null;
   const dialog = $("story");
   dialog.dataset.view = "shelf";
-  $("story-shelf").innerHTML = BOOKS.map((b) => `
-    <li><button class="book-cover" data-book="${b.id}">
+  // Books about this animal come first, with the child's animal on the cover.
+  const id = current.animal.id;
+  // The most specific match first (Baa, Baa before Old MacDonald for a sheep).
+  const matched = BOOKS.filter((b) => b.for.includes(id)).sort((a, b) => a.for.length - b.for.length);
+  const books = [...matched, ...BOOKS.filter((b) => !b.for.includes(id))];
+  $("story-shelf").innerHTML = books.map((b) => `
+    <li><button class="book-cover${b.for.includes(id) ? " matched" : ""}" data-book="${b.id}">
+      ${b.for.includes(id) ? `<img class="book-me" src="${current.img.url}" alt="">` : ""}
       <svg viewBox="0 0 100 100" aria-hidden="true">${b.cover}</svg>
       <span class="book-title">${esc(b.title)}</span>
       <span class="book-credit">${esc(b.credit)}</span>
@@ -186,9 +394,11 @@ function showPage(n, direction = 1) {
   dialog.dataset.view = "page";
   const end = n >= book.pages.length;
   const html = end
-    ? `<div class="story-scene end">${sceneSvg(`${nightSky(29)}${moon(1300, 200, 80)}${hill()}${actor(img, 800, 640, 380, "", "breathe-slow")}`)}</div>
+    ? `<div class="story-scene end">${sceneSvg(["boat", "owlcat", "fishalive"].includes(book.id)
+        ? `${nightSky(29)}${moon(1300, 200, 80)}<rect x="0" y="720" width="${W}" height="${H - 720}" fill="#3f6f9a" stroke="#3a3f4b" stroke-width="6"/>${actor(img, 800, 700, 340, "", "rock-slow")}`
+        : `${nightSky(29)}${moon(1300, 200, 80)}${hill()}${actor(img, 800, 640, 380, "", "breathe-slow")}`)}</div>
        <p class="story-text">The end</p>`
-    : `<div class="story-scene">${sceneSvg(book.pages[n].scene(img))}</div>
+    : `<div class="story-scene">${sceneSvg(book.pages[n].scene(img, animal))}</div>
        <p class="story-text">${esc(book.pages[n].text(animal, kidName))}</p>`;
   const stage = $("story-pages");
   const old = stage.querySelector(".story-page:not(.leaving)");
