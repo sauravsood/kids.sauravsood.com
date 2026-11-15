@@ -1,7 +1,8 @@
 import { getStroke } from "./vendor/perfect-freehand/perfect-freehand.mjs";
 import { ANIMALS, CATEGORIES, animalSvg } from "./animals.js";
-import { AuthError, OfflineError, api, pullDrawings, pushDrawings } from "./sync.js";
-import { allDrawings, countDrawings, deleteDrawingRecord, getDrawing, keepStorage, newId, putDrawing } from "./local.js";
+import { AuthError, OfflineError, api, pullDrawings, pullMine, pushDrawings, pushMine, validMine } from "./sync.js";
+import { allDrawings, allMine, countDrawings, deleteDrawingRecord, deleteMineRecord, getDrawing, getMine, keepStorage, newAnimalId, newId, putDrawing, putMine } from "./local.js";
+import { NoAnimalError, photoToOutline, prepareModel } from "./photo.js";
 import { appleButton, appleSignInFailed } from "/shared/apple.js";
 
 // Drawing happens in a 1000 x 1000 space that matches the animal outlines,
@@ -17,6 +18,26 @@ const IDLE_MS = 3 * 60_000;      // stop counting time after 3 minutes without a
 const SYNC_EVERY_MS = 30_000;    // send time spent and unsent drawings this often
 const PULL_EVERY_MS = 5 * 60_000; // check for drawings from other devices this often
 const SAVE_DELAY_MS = 1200;      // save a drawing this long after the last change
+
+// The My Animals group: outlines made from the child's own photos. Its
+// animals live in state.mine (from local.js), not in animals.js.
+const MY_GROUP = {
+  id: "mine",
+  name: "My Animals",
+  tint: "#ddf1ff",
+  animals: [],
+  shapes: [
+    `<path d="M190 330 L360 330 L410 250 L590 250 L640 330 L810 330 Q870 330 870 390 L870 730 Q870 790 810 790 L190 790 Q130 790 130 730 L130 390 Q130 330 190 330 Z"/>`,
+    `<circle cx="500" cy="555" r="165"/>`,
+    `<ellipse class="dot" cx="500" cy="600" rx="58" ry="46"/>`,
+    `<circle class="dot" cx="425" cy="535" r="24"/>`,
+    `<circle class="dot" cx="468" cy="490" r="24"/>`,
+    `<circle class="dot" cx="532" cy="490" r="24"/>`,
+    `<circle class="dot" cx="575" cy="535" r="24"/>`,
+    `<circle class="dot" cx="765" cy="420" r="26"/>`,
+  ],
+};
+const GROUPS = [...CATEGORIES, MY_GROUP];
 
 const $ = (id) => document.getElementById(id);
 const screens = ["signin", "hello", "home", "category", "history", "draw"].map($);
@@ -49,6 +70,7 @@ const state = {
   usage: {},            // seconds not sent yet, by UTC day: { "2026-11-15": 95 }
   localCount: null,     // drawings on this device for this account
   offline: false,
+  mine: new Map(),      // My Animals for this account, by animal id
 };
 
 // ---------- Small helpers ----------
@@ -89,6 +111,7 @@ function show(id) {
   back.hidden = !(id === "draw" || id === "category");
   if (id === "category") back.href = "#";
   else if (viewing) back.href = "#history";
+  else if (id === "draw" && state.animal?.mine) back.href = "#c/mine";
   else if (id === "draw" && state.animal) {
     const group = CATEGORIES.find((c) => c.id === state.lastCategory && c.animals.includes(state.animal.id))
       || CATEGORIES.find((c) => c.animals.includes(state.animal.id));
@@ -128,6 +151,7 @@ const utcDay = () => new Date().toISOString().slice(0, 10);
 
 async function enterAccount() {
   store.set("trace:me", state.me);
+  await loadMine();
   state.usage = store.get(`trace:usage:${owner()}`, {});
   const pendingName = store.get(`trace:name:${owner()}`, null);
   if (pendingName) state.me.kidName = pendingName;
@@ -251,6 +275,10 @@ $("signout").addEventListener("click", async () => {
   for (const record of await allDrawings(who)) {
     if (!record.dirty) await deleteDrawingRecord(record.cid);
   }
+  for (const record of await allMine(who)) {
+    if (!record.dirty) await deleteMineRecord(record.cid);
+  }
+  state.mine = new Map();
   store.set(`trace:pulled:${who}`, false);
   store.set("trace:me", null);
   state.localCount = null;
@@ -299,10 +327,15 @@ async function syncNow({ pull = false } = {}) {
   syncing = (async () => {
     try {
       await sendName(who);
+      await pushMine(who);
       const stats = await pushDrawings(who);
       if (stats && owner() === who) state.me.stats = stats;
       if (pull || Date.now() - lastPull > PULL_EVERY_MS) {
         lastPull = Date.now();
+        if (await pullMine(who) && owner() === who) {
+          await loadMine();
+          if (!$("category").hidden && state.lastCategory === "mine") showCategory(MY_GROUP);
+        }
         const changed = await pullDrawings(who);
         store.set(`trace:pulled:${who}`, true);
         if (changed && owner() === who && !$("history").hidden) showHistory();
@@ -379,7 +412,7 @@ document.addEventListener("visibilitychange", () => {
 // ---------- Screens ----------
 
 function buildHome() {
-  $("categories").innerHTML = CATEGORIES.map((c) => `
+  $("categories").innerHTML = GROUPS.map((c) => `
     <li><a class="card labelled" style="--tint:${c.tint}" href="#c/${c.id}">
       ${animalSvg(c, "thumb")}<span>${c.name}</span>
     </a></li>`).join("");
@@ -388,12 +421,168 @@ function buildHome() {
 function showCategory(category) {
   state.lastCategory = category.id;
   $("category-name").textContent = category.name;
-  $("animals").innerHTML = category.animals.map((id) => ANIMALS.find((a) => a.id === id)).map((a) => `
-    <li><a class="card" style="--tint:${a.tint}" href="#${a.id}" aria-label="${a.name}">
-      ${animalSvg(a, "thumb")}
-    </a></li>`).join("");
+  const mine = category.id === "mine";
+  $("mine-top").hidden = !mine;
+  $("animals").classList.toggle("mine-grid", mine);
+  if (mine) {
+    // Newest first, each with the photo it was made from in its corner.
+    const list = [...state.mine.values()].filter((a) => !a.hidden).sort((a, b) => b.createdAt - a.createdAt);
+    $("animals").innerHTML = list.map((a) => `
+      <li class="mine-item" data-id="${a.id}">
+        <a class="card" style="--tint:${a.tint}" href="#${a.id}" aria-label="${a.name}">
+          ${animalSvg(a, "thumb")}
+        </a>
+        ${a.photo ? `<img class="photo-badge" src="${a.photo}" alt="">` : ""}
+        <button class="icon-btn trash" aria-label="Remove"><svg viewBox="0 0 24 24"><path d="M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 21 H17 L18 7 M10 11 V17 M14 11 V17"/></svg></button>
+      </li>`).join("");
+    if (navigator.onLine) prepareModel().catch(() => {}); // get the outline maker ready
+  } else {
+    $("animals").innerHTML = category.animals.map((id) => ANIMALS.find((a) => a.id === id)).map((a) => `
+      <li><a class="card" style="--tint:${a.tint}" href="#${a.id}" aria-label="${a.name}">
+        ${animalSvg(a, "thumb")}
+      </a></li>`).join("");
+  }
   show("category");
 }
+
+// ---------- My Animals ----------
+
+function mineAnimal(record) {
+  return {
+    id: record.cid,
+    name: "My animal",
+    tint: record.tint,
+    shapes: record.shapes,
+    photo: record.photo,
+    hidden: !!record.hidden,
+    createdAt: record.createdAt,
+    mine: true,
+  };
+}
+
+async function loadMine() {
+  const who = owner();
+  let records = [];
+  try { records = await allMine(who); } catch (err) { console.error(err); }
+  if (owner() !== who) return;
+  state.mine = new Map(records.filter(validMine).map((r) => [r.cid, mineAnimal(r)]));
+}
+
+// Built-in animals, then this account's own (removed ones too, so old drawings still open).
+function findAnimal(id) {
+  return ANIMALS.find((a) => a.id === id) || state.mine.get(id) || null;
+}
+
+$("camera").addEventListener("click", () => {
+  prepareModel().catch(() => {});
+  $("camera-input").value = "";
+  $("camera-input").click();
+});
+
+$("camera-input").addEventListener("change", () => {
+  const file = $("camera-input").files && $("camera-input").files[0];
+  if (file) makeOutline(file);
+});
+
+let snapRun = 0;
+let snapResult = null;
+let snapUrl = null;
+
+function setSnap(stateName) {
+  $("snap").dataset.state = stateName;
+  $("snap-keep").disabled = stateName !== "done";
+}
+
+async function makeOutline(file) {
+  const run = ++snapRun;
+  snapResult = null;
+  if (snapUrl) URL.revokeObjectURL(snapUrl);
+  snapUrl = URL.createObjectURL(file);
+  $("snap-photo").src = snapUrl;
+  $("snap-outline").innerHTML = "";
+  setSnap("busy");
+  if (!$("snap").open) $("snap").showModal();
+  try {
+    const result = await photoToOutline(file);
+    if (run !== snapRun) return;
+    snapResult = result;
+    const view = $("snap-outline");
+    view.style.setProperty("--tint", result.tint);
+    view.innerHTML = `<svg class="thumb" viewBox="0 0 1000 1000" aria-hidden="true">${result.shapes.join("")}</svg>
+      <img class="photo-badge" src="${result.photo}" alt="">`;
+    setSnap("done");
+  } catch (err) {
+    if (run !== snapRun) return;
+    setSnap("oops");
+    if (!(err instanceof NoAnimalError)) {
+      console.error(err);
+      toast(navigator.onLine ? "That didn’t work. Try again." : "Connect to the internet once to use the camera.");
+    }
+  }
+}
+
+function closeSnap() {
+  snapRun++;
+  snapResult = null;
+  if ($("snap").open) $("snap").close();
+  if (snapUrl) { URL.revokeObjectURL(snapUrl); snapUrl = null; }
+  $("snap-photo").removeAttribute("src");
+}
+
+$("snap-close").addEventListener("click", closeSnap);
+$("snap").addEventListener("cancel", (e) => { e.preventDefault(); closeSnap(); });
+$("snap-retake").addEventListener("click", () => {
+  $("camera-input").value = "";
+  $("camera-input").click();
+});
+
+// Keeps the new animal for good (on the device now, on the account with the
+// next sync) and opens it to trace.
+$("snap-keep").addEventListener("click", async () => {
+  if (!snapResult || !state.me) return;
+  const { shapes, photo, tint } = snapResult;
+  const now = Date.now();
+  const record = {
+    cid: newAnimalId(),
+    owner: owner(),
+    shapes,
+    photo,
+    tint,
+    hidden: false,
+    createdAt: now,
+    updatedAt: now,
+    rev: 1,
+    dirty: 1,
+    onServer: false,
+  };
+  try {
+    await putMine(record);
+  } catch (err) { handleError(err); return; }
+  state.mine.set(record.cid, mineAnimal(record));
+  closeSnap();
+  scheduleSync(0);
+  location.hash = record.cid;
+});
+
+// Removing a My Animal (two taps) hides it here and on the account.
+$("animals").addEventListener("click", (e) => {
+  const button = e.target.closest(".trash");
+  if (!button) return;
+  e.preventDefault();
+  const item = button.closest(".mine-item");
+  twoTap(button, async () => {
+    try {
+      const record = await getMine(item.dataset.id);
+      if (record) {
+        await putMine({ ...record, hidden: true, dirty: 1, rev: record.rev + 1, updatedAt: Date.now() });
+        const animal = state.mine.get(record.cid);
+        if (animal) animal.hidden = true;
+      }
+      item.remove();
+      scheduleSync(0);
+    } catch (err) { handleError(err); }
+  });
+});
 
 // ---------- Analytics ----------
 
@@ -416,10 +605,11 @@ function pageFor(hash) {
   if (!state.me.kidName) return ["/trace/name", "Name"];
   if (hash === "history") return ["/trace/history", "History"];
   const group = hash.match(/^c\/(\w+)$/);
-  const category = group && CATEGORIES.find((c) => c.id === group[1]);
+  const category = group && GROUPS.find((c) => c.id === group[1]);
   if (category) return [`/trace/group/${category.id}`, category.name || category.id];
   const existing = hash.match(/^([de])\/[\w-]+$/);
   if (existing) return existing[1] === "d" ? ["/trace/drawing/view", "View drawing"] : ["/trace/drawing/edit", "Drawing"];
+  if (state.mine.has(hash)) return ["/trace/draw/my-animal", "My animal"];
   const animal = ANIMALS.find((a) => a.id === hash);
   if (animal) return [`/trace/draw/${animal.id}`, animal.name || animal.id];
   return ["/trace/", "Animals"];
@@ -442,7 +632,7 @@ async function route() {
   if (hash === "history") return showHistory();
 
   const group = hash.match(/^c\/(\w+)$/);
-  const category = group && CATEGORIES.find((c) => c.id === group[1]);
+  const category = group && GROUPS.find((c) => c.id === group[1]);
   if (category) return showCategory(category);
 
   // #d/<id> views a saved drawing; #e/<id> keeps editing the drawing in progress.
@@ -450,7 +640,7 @@ async function route() {
   const existing = hash.match(/^([de])\/([\w-]+)$/);
   if (existing) return openDrawing(/^\d+$/.test(existing[2]) ? `s${existing[2]}` : existing[2], existing[1] === "d");
 
-  const animal = ANIMALS.find((a) => a.id === hash);
+  const animal = findAnimal(hash);
   if (animal) return startDrawing(animal);
 
   show("home");
@@ -478,7 +668,7 @@ async function showHistory() {
       <h2>${label}</h2>
       <ul class="grid">
         ${items.map((d) => {
-          const animal = ANIMALS.find((a) => a.id === d.animal);
+          const animal = findAnimal(d.animal);
           const when = stamp(d.createdAt);
           const img = d.thumb ? `<img src="${d.thumb}" alt="">` : `<img alt="">`;
           return `<li class="past-item" data-id="${d.cid}">
@@ -550,11 +740,11 @@ function dayLabel(date) {
 async function openDrawing(cid, readOnly) {
   try {
     let record = await getDrawing(cid);
-    if (!record && !state.offline) {
+    if ((!record || !findAnimal(record.animal)) && !state.offline) {
       await syncNow({ pull: true }); // made on another device, not fetched yet
       record = await getDrawing(cid);
     }
-    const animal = record && ANIMALS.find((a) => a.id === record.animal);
+    const animal = record && findAnimal(record.animal);
     if (!animal || record.deleted || record.owner !== owner()) throw new Error("Drawing not found");
     startDrawing(animal, record, readOnly);
     $("view-date").textContent = stamp(record.createdAt);
@@ -576,6 +766,10 @@ function startDrawing(animal, record = null, readOnly = false) {
   state.current = null;
   state.dirty = false;
   guide.innerHTML = animalSvg(animal, "guide");
+  const photo = $("stage-photo");
+  photo.hidden = !animal.photo;
+  if (animal.photo) photo.src = animal.photo;
+  else photo.removeAttribute("src");
   stage.setAttribute("aria-label", `Trace the ${animal.name.toLowerCase()}`);
   show("draw");
   layout();

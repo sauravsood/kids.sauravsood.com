@@ -16,11 +16,11 @@ const STORE = "drawings";
 let dbPromise = null;
 let memory = null; // used if IndexedDB can't be opened (some private modes)
 
-function open() {
-  dbPromise ??= new Promise((resolve) => {
+function openDb(name, onReady) {
+  return new Promise((resolve) => {
     let req;
     try {
-      req = indexedDB.open(DB_NAME, 1);
+      req = indexedDB.open(name, 1);
     } catch {
       resolve(null);
       return;
@@ -33,15 +33,28 @@ function open() {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => resolve(null);
     req.onblocked = () => resolve(null);
-  }).then((db) => {
-    if (!db) memory = new Map();
-    return db;
-  });
+  }).then((db) => { onReady(db); return db; });
+}
+
+function open() {
+  dbPromise ??= openDb(DB_NAME, (db) => { if (!db) memory = new Map(); });
   return dbPromise;
 }
 
-function run(mode, fn) {
-  return open().then((db) => {
+// My Animals: outlines made from the child's own photos (photo.js), in a
+// database of their own so the drawings database never needs an upgrade.
+// A record: { cid, owner, shapes, photo, tint, createdAt, updatedAt, rev,
+//   dirty, hidden, onServer }. cid is also the animal id ("my" + letters).
+// Removing one only hides it, so drawings of it still open from History.
+let mineDbPromise = null;
+let memoryMine = null;
+function openMine() {
+  mineDbPromise ??= openDb("trace-mine", (db) => { if (!db) memoryMine = new Map(); });
+  return mineDbPromise;
+}
+
+function run(mode, fn, opener = open) {
+  return opener().then((db) => {
     if (!db) return fn(null);
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE, mode);
@@ -93,9 +106,42 @@ export function deleteDrawingRecord(cid) {
   });
 }
 
+// ---------- My Animals ----------
+
+export async function allMine(owner) {
+  const list = await run("readonly", (store) =>
+    store ? store.index("owner").getAll(owner) : [...memoryMine.values()].filter((r) => r.owner === owner), openMine);
+  return list || [];
+}
+
+export async function getMine(cid) {
+  const found = await run("readonly", (store) => (store ? store.get(cid) : memoryMine.get(cid)), openMine);
+  return found || null;
+}
+
+export function putMine(record) {
+  return run("readwrite", (store) => {
+    if (store) store.put(record);
+    else memoryMine.set(record.cid, structuredClone(record));
+  }, openMine);
+}
+
+export function deleteMineRecord(cid) {
+  return run("readwrite", (store) => {
+    if (store) store.delete(cid);
+    else memoryMine.delete(cid);
+  }, openMine);
+}
+
 // Ask the browser not to clear this storage when space is low.
 export function keepStorage() {
   try { navigator.storage?.persist?.(); } catch { /* not supported */ }
+}
+
+// Ids for My Animals double as animal ids, which are lowercase letters only.
+export function newAnimalId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(14));
+  return `my${[...bytes].map((b) => String.fromCharCode(97 + (b % 26))).join("")}`;
 }
 
 export function newId() {

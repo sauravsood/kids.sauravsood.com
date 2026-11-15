@@ -3,7 +3,7 @@
 // pushDrawings sends what changed here, pullDrawings brings in what changed
 // on other devices. Both stop quietly when there's no internet.
 
-import { allDrawings, deleteDrawingRecord, dirtyDrawings, getDrawing, putDrawing } from "./local.js";
+import { allDrawings, allMine, deleteDrawingRecord, dirtyDrawings, getDrawing, getMine, putDrawing, putMine } from "./local.js";
 
 export class AuthError extends Error {}
 export class OfflineError extends Error {}
@@ -109,6 +109,79 @@ export async function pullDrawings(owner) {
         rev: (now?.rev || 0) + 1,
         dirty: 0,
         deleted: false,
+        onServer: true,
+      });
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+// ---------- My Animals ----------
+
+// Outlines go into the page as SVG, so only plain paths made by photo.js are
+// accepted (the server checks the same).
+const SHAPE_RE = /^<path (class="line" )?d="[MQLZ0-9 -]{3,20000}"\/>$/;
+const PHOTO_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]{100,60000}$/;
+export function validMine(d) {
+  return Array.isArray(d.shapes) && d.shapes.length > 0 && d.shapes.length <= 40
+    && d.shapes.every((s) => typeof s === "string" && SHAPE_RE.test(s))
+    && (d.photo == null || PHOTO_RE.test(d.photo))
+    && /^#[0-9a-f]{6}$/.test(d.tint || "");
+}
+
+// Sends new, changed or removed My Animals. Removing only hides one.
+export async function pushMine(owner) {
+  for (const record of (await allMine(owner)).filter((r) => r.dirty)) {
+    try {
+      await api(`/api/mine/${record.cid}`, {
+        method: "PUT",
+        data: {
+          shapes: record.shapes,
+          photo: record.photo,
+          tint: record.tint,
+          hidden: !!record.hidden,
+          createdAt: record.createdAt,
+          updatedAt: record.updatedAt,
+        },
+      });
+      const now = await getMine(record.cid);
+      if (now) await putMine({ ...now, onServer: true, dirty: now.rev === record.rev ? 0 : 1 });
+    } catch (err) {
+      if (err instanceof AuthError || err instanceof OfflineError) throw err;
+      console.error("Couldn't sync my animal", record.cid, err);
+    }
+  }
+}
+
+// Brings in My Animals made or changed on other devices. True if any changed.
+export async function pullMine(owner) {
+  const { animals: remote } = await api("/api/mine?meta=1");
+  const locals = new Map((await allMine(owner)).map((r) => [r.cid, r]));
+  const wanted = remote
+    .filter((d) => {
+      const mine = locals.get(d.id);
+      return !mine || (!mine.dirty && d.updatedAt > mine.updatedAt);
+    })
+    .map((d) => d.id);
+  let changed = false;
+  for (let i = 0; i < wanted.length; i += 10) {
+    const { animals } = await api(`/api/mine?ids=${wanted.slice(i, i + 10).join(",")}`);
+    for (const d of animals) {
+      if (!validMine(d)) continue;
+      const now = await getMine(d.id);
+      if (now && now.dirty) continue; // changed here meanwhile: ours wins
+      await putMine({
+        cid: d.id,
+        owner,
+        shapes: d.shapes,
+        photo: d.photo,
+        tint: d.tint,
+        hidden: !!d.hidden,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+        rev: (now?.rev || 0) + 1,
+        dirty: 0,
         onServer: true,
       });
       changed = true;
