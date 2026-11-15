@@ -1,4 +1,4 @@
-// API for the kids site: Google sign-in and sessions (shared by every app),
+// API for the kids site: Google and Apple sign-in and sessions (shared by every app),
 // Trace's saved drawings and usage stats, and one saved JSON document per
 // app for Pocket Money and My Routines. Also the site-wide feedback bubble
 // (src/feedback.js).
@@ -6,12 +6,16 @@
 // /api/* requests reach this Worker (see run_worker_first in wrangler.jsonc).
 
 import { FEEDBACK_SCHEMA, handleFeedback } from "./feedback.js";
+import { APPLE, GOOGLE, TokenError, emailVerified, verifyIdToken } from "./oidc.js";
 
 const SESSION_COOKIE = "trace_session";
 const SESSION_DAYS = 180;
 const MAX_BODY = 1_800_000; // D1 rows are limited to about 2 MB
 const MAX_THUMB = 150_000;
 const ANIMAL_RE = /^[a-z]{2,20}$/;
+const CLIENT_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;  // drawing ids made on the device, so saving offline works
+const RETURN_RE = /^\/[a-z]{2,20}(\/[a-z]{2,20})?\/$/; // where Apple sign-in sends people back to
+const APPLE_STATE_COOKIE = "apple_state";
 const STATE_APPS = new Set(["money", "routines"]);
 const MAX_STATE = 100_000;
 
@@ -48,12 +52,35 @@ const SCHEMA = [
      data TEXT NOT NULL,
      updated_at INTEGER NOT NULL,
      PRIMARY KEY (user_id, app))`,
+  // Extra sign-ins (Apple, or a second provider) pointing at an existing user.
+  // users.google_sub holds the first one: a Google sub, "apple:<sub>" or "dev:<email>".
+  `CREATE TABLE IF NOT EXISTS identities (
+     sub TEXT PRIMARY KEY,
+     user_id INTEGER NOT NULL,
+     created_at INTEGER NOT NULL)`,
   ...FEEDBACK_SCHEMA,
 ];
 
+// Added after the first release: drawings get an id made on the device
+// (client_id), so a drawing saved offline can be sent more than once
+// without turning into two drawings. Older drawings get "s<id>".
+async function migrate(db) {
+  try {
+    await db.prepare("ALTER TABLE drawings ADD COLUMN client_id TEXT").run();
+  } catch (err) {
+    if (!/duplicate column/i.test(String(err && err.message))) throw err;
+  }
+  await db.batch([
+    db.prepare("UPDATE drawings SET client_id = 's' || id WHERE client_id IS NULL"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS drawings_by_client ON drawings (user_id, client_id)"),
+  ]);
+}
+
 let schemaReady = null;
 function ensureSchema(db) {
-  schemaReady ??= db.batch(SCHEMA.map((s) => db.prepare(s))).catch((e) => { schemaReady = null; throw e; });
+  schemaReady ??= db.batch(SCHEMA.map((s) => db.prepare(s)))
+    .then(() => migrate(db))
+    .catch((e) => { schemaReady = null; throw e; });
   return schemaReady;
 }
 
@@ -78,7 +105,7 @@ export default {
       await ensureSchema(env.DB);
       return await route(request, env, url);
     } catch (err) {
-      if (err instanceof HttpError) return json({ error: err.message }, err.status);
+      if (err instanceof HttpError || err instanceof TokenError) return json({ error: err.message }, err.status);
       console.error(err);
       return json({ error: "Something went wrong" }, 500);
     }
@@ -94,16 +121,23 @@ async function route(request, env, url) {
   const path = url.pathname;
 
   if (path === "/api/config" && method === "GET") {
-    return json({ googleClientId: env.GOOGLE_CLIENT_ID || null, devLogin: env.DEV_LOGIN === "1" });
+    return json({
+      googleClientId: env.GOOGLE_CLIENT_ID || null,
+      appleClientId: env.APPLE_CLIENT_ID || null,
+      devLogin: env.DEV_LOGIN === "1",
+    });
   }
   if (path === "/api/auth/google" && method === "POST") {
     const { credential } = await body(request);
-    const claims = await verifyGoogleToken(credential, env.GOOGLE_CLIENT_ID);
-    return signIn(env, claims.sub, claims.email || null);
+    const claims = await verifyIdToken(credential, GOOGLE, { audience: env.GOOGLE_CLIENT_ID });
+    const { user, setCookie } = await signIn(env, claims.sub, claims.email || null, emailVerified(claims));
+    return json(await profile(env, user), 200, { "Set-Cookie": setCookie });
   }
+  if (path === "/api/auth/apple/callback" && method === "POST") return appleCallback(request, env);
   if (path === "/api/auth/dev" && method === "POST" && env.DEV_LOGIN === "1") {
     const { email } = await body(request);
-    return signIn(env, `dev:${email}`, email);
+    const { user, setCookie } = await signIn(env, `dev:${email}`, email, true);
+    return json(await profile(env, user), 200, { "Set-Cookie": setCookie });
   }
   if (path === "/api/auth/logout" && method === "POST") {
     const token = readCookie(request, SESSION_COOKIE);
@@ -123,10 +157,13 @@ async function route(request, env, url) {
   }
 
   if (path === "/api/usage" && method === "POST") {
-    const { seconds } = await body(request);
+    const { seconds, day: sentDay } = await body(request);
     const s = Math.max(0, Math.min(120, Math.round(Number(seconds) || 0)));
     if (s) {
-      const day = new Date().toISOString().slice(0, 10);
+      // Time spent offline is sent later with the (UTC) day it was spent on.
+      const today = new Date().toISOString().slice(0, 10);
+      const age = (Date.parse(today) - Date.parse(String(sentDay))) / 86400000;
+      const day = /^\d{4}-\d{2}-\d{2}$/.test(String(sentDay)) && age >= 0 && age <= 60 ? sentDay : today;
       await env.DB.batch([
         env.DB.prepare("UPDATE users SET seconds = seconds + ? WHERE id = ?").bind(s, user.id),
         env.DB.prepare(`INSERT INTO usage (user_id, day, seconds) VALUES (?, ?, ?)
@@ -161,10 +198,53 @@ async function route(request, env, url) {
   }
 
   if (path === "/api/drawings" && method === "GET") {
+    // ?meta=1: every drawing, without pictures, so a device can see what changed.
+    if (url.searchParams.get("meta") === "1") {
+      const { results } = await env.DB.prepare(
+        `SELECT client_id, animal, seconds, created_at, updated_at FROM drawings
+         WHERE user_id = ? ORDER BY created_at DESC LIMIT 5000`).bind(user.id).all();
+      return json({ drawings: results.map((r) => ({
+        clientId: r.client_id, animal: r.animal, seconds: r.seconds, createdAt: r.created_at, updatedAt: r.updated_at,
+      })) });
+    }
+    // ?ids=a,b,c: those drawings in full (strokes and thumbnail), up to 20.
+    const ids = (url.searchParams.get("ids") || "").split(",").filter((id) => CLIENT_ID_RE.test(id)).slice(0, 20);
+    if (ids.length) {
+      const { results } = await env.DB.prepare(
+        `SELECT * FROM drawings WHERE user_id = ? AND client_id IN (${ids.map(() => "?").join(",")})`)
+        .bind(user.id, ...ids).all();
+      return json({ drawings: results.map((r) => ({ ...publicDrawing(r), strokes: JSON.parse(r.strokes) })) });
+    }
     const { results } = await env.DB.prepare(
-      `SELECT id, animal, thumb, seconds, created_at, updated_at FROM drawings
+      `SELECT id, client_id, animal, thumb, seconds, created_at, updated_at FROM drawings
        WHERE user_id = ? ORDER BY created_at DESC LIMIT 200`).bind(user.id).all();
     return json({ drawings: results.map(publicDrawing) });
+  }
+
+  // Drawings by the id the device gave them. PUT creates or updates (the
+  // newest edit wins), so sending the same drawing twice is harmless.
+  const byClient = path.match(/^\/api\/drawings\/c\/([A-Za-z0-9_-]{1,40})$/);
+  if (byClient) {
+    const clientId = byClient[1];
+    if (method === "PUT") {
+      const raw = await body(request);
+      const d = validDrawing(raw);
+      const now = Date.now();
+      const updatedAt = clampTime(raw.updatedAt, now);
+      const createdAt = Math.min(clampTime(raw.createdAt, now), updatedAt);
+      await env.DB.prepare(
+        `INSERT INTO drawings (user_id, client_id, animal, strokes, thumb, seconds, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (user_id, client_id) DO UPDATE SET
+           strokes = excluded.strokes, thumb = excluded.thumb, seconds = excluded.seconds, updated_at = excluded.updated_at
+         WHERE excluded.updated_at >= drawings.updated_at`)
+        .bind(user.id, clientId, d.animal, d.strokes, d.thumb, d.seconds, createdAt, updatedAt).run();
+      return json({ ok: true, stats: await stats(env, user.id) });
+    }
+    if (method === "DELETE") {
+      await env.DB.prepare("DELETE FROM drawings WHERE client_id = ? AND user_id = ?").bind(clientId, user.id).run();
+      return json({ ok: true, stats: await stats(env, user.id) });
+    }
   }
   if (path === "/api/drawings" && method === "POST") {
     const d = validDrawing(await body(request));
@@ -173,6 +253,8 @@ async function route(request, env, url) {
       `INSERT INTO drawings (user_id, animal, strokes, thumb, seconds, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, animal, thumb, seconds, created_at, updated_at`)
       .bind(user.id, d.animal, d.strokes, d.thumb, d.seconds, now, now).first();
+    await env.DB.prepare("UPDATE drawings SET client_id = 's' || id WHERE id = ?").bind(row.id).run();
+    row.client_id = `s${row.id}`;
     return json({ drawing: publicDrawing(row), stats: await stats(env, user.id) }, 201);
   }
 
@@ -188,7 +270,7 @@ async function route(request, env, url) {
       const d = validDrawing(await body(request));
       const row = await env.DB.prepare(
         `UPDATE drawings SET strokes = ?, thumb = ?, seconds = ?, updated_at = ?
-         WHERE id = ? AND user_id = ? RETURNING id, animal, thumb, seconds, created_at, updated_at`)
+         WHERE id = ? AND user_id = ? RETURNING id, client_id, animal, thumb, seconds, created_at, updated_at`)
         .bind(d.strokes, d.thumb, d.seconds, Date.now(), id, user.id).first();
       if (!row) throw new HttpError(404, "Not found");
       return json({ drawing: publicDrawing(row), stats: await stats(env, user.id) });
@@ -204,20 +286,66 @@ async function route(request, env, url) {
 
 // ---------- Accounts and sessions ----------
 
-async function signIn(env, sub, email) {
+// Finds or creates the account for a sign-in and starts a session.
+// `sub` is the provider's id for the person ("apple:…" for Apple). A new
+// provider with the same verified email joins the existing account, so a
+// grown-up who used Google on one device and Apple on another sees the
+// same drawings. Apple's private relay addresses never match anything.
+async function signIn(env, sub, email, verified) {
   const now = Date.now();
-  const user = await env.DB.prepare(
-    `INSERT INTO users (google_sub, email, created_at) VALUES (?, ?, ?)
-     ON CONFLICT (google_sub) DO UPDATE SET email = excluded.email
-     RETURNING id, kid_name, email`).bind(sub, email, now).first();
+  const db = env.DB;
+  let user = await db.prepare(
+    `SELECT users.id, users.kid_name, users.email, users.google_sub FROM identities
+     JOIN users ON users.id = identities.user_id WHERE identities.sub = ?`).bind(sub).first();
+  user ??= await db.prepare("SELECT id, kid_name, email, google_sub FROM users WHERE google_sub = ?").bind(sub).first();
+  if (!user && email && verified) {
+    user = await db.prepare(
+      "SELECT id, kid_name, email, google_sub FROM users WHERE lower(email) = lower(?) ORDER BY id LIMIT 1").bind(email).first();
+    if (user) {
+      await db.prepare("INSERT OR IGNORE INTO identities (sub, user_id, created_at) VALUES (?, ?, ?)").bind(sub, user.id, now).run();
+    }
+  }
+  if (!user) {
+    user = await db.prepare(
+      `INSERT INTO users (google_sub, email, created_at) VALUES (?, ?, ?)
+       RETURNING id, kid_name, email, google_sub`).bind(sub, email, now).first();
+  } else if (user.google_sub === sub && email && email !== user.email) {
+    await db.prepare("UPDATE users SET email = ? WHERE id = ?").bind(email, user.id).run();
+    user.email = email;
+  }
   const token = randomToken();
   const maxAge = SESSION_DAYS * 86400;
-  await env.DB.batch([
-    env.DB.prepare("DELETE FROM sessions WHERE user_id = ? AND expires_at < ?").bind(user.id, now),
-    env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
+  await db.batch([
+    db.prepare("DELETE FROM sessions WHERE user_id = ? AND expires_at < ?").bind(user.id, now),
+    db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
       .bind(await sha256(token), user.id, now + maxAge * 1000),
   ]);
-  return json(await profile(env, user), 200, { "Set-Cookie": cookie(token, maxAge) });
+  return { user, setCookie: cookie(token, maxAge) };
+}
+
+// Sign in with Apple, web flow. The page sets a short-lived apple_state
+// cookie and sends the browser to Apple; Apple posts the result here
+// (response_mode=form_post). The ID token is checked against Apple's keys,
+// so no Apple private key is needed. Then back to the app that asked.
+async function appleCallback(request, env) {
+  const form = await request.formData();
+  const [nonce, back] = String(form.get("state") || "").split("~");
+  const returnTo = RETURN_RE.test(back || "") ? back : "/trace/";
+  const headers = new Headers({ "Cache-Control": "no-store" });
+  headers.append("Set-Cookie", `${APPLE_STATE_COOKIE}=; Path=/api/auth/apple; Max-Age=0; HttpOnly; Secure; SameSite=None`);
+  const redirect = (to) => { headers.set("Location", to); return new Response(null, { status: 303, headers }); };
+  if (form.get("error")) return redirect(returnTo); // closed or cancelled
+  const expected = readCookie(request, APPLE_STATE_COOKIE);
+  if (!nonce || !expected || nonce !== expected) return redirect(`${returnTo}?signin=failed`);
+  try {
+    const claims = await verifyIdToken(String(form.get("id_token") || ""), APPLE, { audience: env.APPLE_CLIENT_ID, nonce });
+    const { setCookie } = await signIn(env, `apple:${claims.sub}`, claims.email || null, emailVerified(claims));
+    headers.append("Set-Cookie", setCookie);
+    return redirect(returnTo);
+  } catch (err) {
+    console.error(err);
+    return redirect(`${returnTo}?signin=failed`);
+  }
 }
 
 async function currentUser(request, env) {
@@ -231,7 +359,7 @@ async function currentUser(request, env) {
 }
 
 async function profile(env, user) {
-  return { kidName: user.kid_name || null, email: user.email || null, stats: await stats(env, user.id) };
+  return { account: user.id, kidName: user.kid_name || null, email: user.email || null, stats: await stats(env, user.id) };
 }
 
 async function stats(env, userId) {
@@ -241,41 +369,6 @@ async function stats(env, userId) {
             (SELECT COALESCE(seconds, 0) FROM usage WHERE user_id = ?1 AND day = ?2) AS today`)
     .bind(userId, new Date().toISOString().slice(0, 10)).first();
   return { drawings: row.drawings || 0, seconds: row.seconds || 0, todaySeconds: row.today || 0 };
-}
-
-// ---------- Google ID token check ----------
-
-let jwksCache = { keys: null, expires: 0 };
-
-async function googleKeys() {
-  if (jwksCache.keys && Date.now() < jwksCache.expires) return jwksCache.keys;
-  const res = await fetch("https://www.googleapis.com/oauth2/v3/certs");
-  if (!res.ok) throw new HttpError(502, "Could not reach Google");
-  const { keys } = await res.json();
-  const maxAge = Number((res.headers.get("cache-control") || "").match(/max-age=(\d+)/)?.[1] || 3600);
-  jwksCache = { keys, expires: Date.now() + maxAge * 1000 };
-  return keys;
-}
-
-async function verifyGoogleToken(token, clientId) {
-  if (!clientId) throw new HttpError(503, "Google sign-in is not set up");
-  if (typeof token !== "string" || token.split(".").length !== 3) throw new HttpError(400, "Bad sign-in token");
-  const [h, p, s] = token.split(".");
-  const header = JSON.parse(b64urlText(h));
-  const claims = JSON.parse(b64urlText(p));
-  const jwk = (await googleKeys()).find((k) => k.kid === header.kid);
-  if (!jwk || header.alg !== "RS256") throw new HttpError(401, "Unknown sign-in key");
-  const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
-  const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, b64urlBytes(s), new TextEncoder().encode(`${h}.${p}`));
-  const now = Date.now() / 1000;
-  if (!ok
-    || !["accounts.google.com", "https://accounts.google.com"].includes(claims.iss)
-    || claims.aud !== clientId
-    || !(claims.exp > now)
-    || !claims.sub) {
-    throw new HttpError(401, "Sign-in could not be verified");
-  }
-  return claims;
 }
 
 // ---------- Helpers ----------
@@ -290,8 +383,13 @@ function validDrawing(d) {
   return { animal, strokes, thumb, seconds };
 }
 
+function clampTime(value, now) {
+  const t = Math.round(Number(value));
+  return t > 1_600_000_000_000 && t <= now + 60_000 ? t : now;
+}
+
 function publicDrawing(row) {
-  return { id: row.id, animal: row.animal, thumb: row.thumb, seconds: row.seconds, createdAt: row.created_at, updatedAt: row.updated_at };
+  return { id: row.id, clientId: row.client_id || `s${row.id}`, animal: row.animal, thumb: row.thumb, seconds: row.seconds, createdAt: row.created_at, updatedAt: row.updated_at };
 }
 
 async function body(request) {
@@ -328,13 +426,4 @@ function randomToken() {
 async function sha256(text) {
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function b64urlBytes(s) {
-  const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4));
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
-}
-
-function b64urlText(s) {
-  return new TextDecoder().decode(b64urlBytes(s));
 }

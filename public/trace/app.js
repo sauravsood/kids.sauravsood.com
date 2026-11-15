@@ -1,5 +1,8 @@
 import { getStroke } from "./vendor/perfect-freehand/perfect-freehand.mjs";
 import { ANIMALS, CATEGORIES, animalSvg } from "./animals.js";
+import { AuthError, OfflineError, api, pullDrawings, pushDrawings } from "./sync.js";
+import { allDrawings, countDrawings, deleteDrawingRecord, getDrawing, keepStorage, newId, putDrawing } from "./local.js";
+import { appleButton, appleSignInFailed } from "/shared/apple.js";
 
 // Drawing happens in a 1000 x 1000 space that matches the animal outlines,
 // so strokes stay lined up with the picture whatever the screen size.
@@ -11,7 +14,8 @@ const COLORS = [
 ];
 const SIZES = [14, 28, 56];
 const IDLE_MS = 3 * 60_000;      // stop counting time after 3 minutes without a touch
-const USAGE_FLUSH_MS = 30_000;   // send time spent to the server this often
+const SYNC_EVERY_MS = 30_000;    // send time spent and unsent drawings this often
+const PULL_EVERY_MS = 5 * 60_000; // check for drawings from other devices this often
 const SAVE_DELAY_MS = 1200;      // save a drawing this long after the last change
 
 const $ = (id) => document.getElementById(id);
@@ -26,10 +30,11 @@ const committed = document.createElement("canvas");
 const cctx = committed.getContext("2d");
 
 const state = {
-  me: null,             // { kidName, email, stats }
+  me: null,             // { account, kidName, email, stats }; kept on the device for offline use
   config: null,
   animal: null,
-  drawingId: null,      // server id once the drawing has been saved
+  cid: null,            // this drawing's id once it has been saved (made on the device)
+  createdAt: null,
   drawingSeconds: 0,
   dirty: false,
   color: COLORS[0],
@@ -41,7 +46,9 @@ const state = {
   activePointer: null,
   penSeenAt: -Infinity, // no Pencil yet, so fingers draw straight away
   lastActivity: Date.now(),
-  pendingSeconds: 0,
+  usage: {},            // seconds not sent yet, by UTC day: { "2026-11-15": 95 }
+  localCount: null,     // drawings on this device for this account
+  offline: false,
 };
 
 // ---------- Small helpers ----------
@@ -54,22 +61,6 @@ const store = {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private browsing */ }
   },
 };
-
-class AuthError extends Error {}
-
-async function api(path, { method = "GET", data, keepalive = false } = {}) {
-  const res = await fetch(path, {
-    method,
-    keepalive,
-    credentials: "same-origin",
-    headers: data ? { "Content-Type": "application/json" } : undefined,
-    body: data ? JSON.stringify(data) : undefined,
-  });
-  if (res.status === 401) throw new AuthError("Signed out");
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
-  return body;
-}
 
 let toastTimer = 0;
 function toast(text) {
@@ -110,26 +101,49 @@ function show(id) {
 // ---------- Sign in ----------
 
 async function boot() {
+  keepStorage();
+  if (appleSignInFailed()) setTimeout(() => toast("Sign-in didn’t work. Try again."), 300);
   try {
     state.config = await api("/api/config");
+    store.set("trace:config", state.config);
   } catch {
-    state.config = { googleClientId: null, devLogin: false };
+    state.config = store.get("trace:config", { googleClientId: null, appleClientId: null, devLogin: false });
   }
   try {
     state.me = await api("/api/me");
+    setOffline(false);
   } catch (err) {
-    state.me = null;
+    // No internet: carry on as whoever was signed in last time.
+    state.me = err instanceof AuthError ? null : store.get("trace:me", null);
+    if (!(err instanceof AuthError)) setOffline(true);
   }
+  if (state.me) await enterAccount();
   route();
+  if (state.me) syncNow({ pull: true });
+}
+
+// The account's id, used to keep each account's drawings apart on the device.
+const owner = () => state.me && String(state.me.account ?? state.me.email);
+const utcDay = () => new Date().toISOString().slice(0, 10);
+
+async function enterAccount() {
+  store.set("trace:me", state.me);
+  state.usage = store.get(`trace:usage:${owner()}`, {});
+  const pendingName = store.get(`trace:name:${owner()}`, null);
+  if (pendingName) state.me.kidName = pendingName;
+  await refreshCount();
 }
 
 function showSignin() {
   state.me = null;
   show("signin");
-  const { googleClientId, devLogin } = state.config || {};
+  const { googleClientId, appleClientId, devLogin } = state.config || {};
   $("dev-login").hidden = !devLogin;
+  const note = $("signin-note");
+  note.textContent = navigator.onLine ? "Grown-ups: sign in to save drawings." : "Connect to the internet to sign in.";
+  if (appleClientId && !$("apple-btn").firstChild) $("apple-btn").appendChild(appleButton(appleClientId, "/trace/"));
   if (!googleClientId) {
-    if (!devLogin) $("signin-note").textContent = "Sign-in isn’t set up yet.";
+    if (!devLogin && !appleClientId) note.textContent = "Sign-in isn’t set up yet.";
     return;
   }
   loadGoogle().then(() => {
@@ -139,7 +153,7 @@ function showSignin() {
       auto_select: true,
     });
     google.accounts.id.renderButton($("google-btn"), { theme: "filled_blue", size: "large", shape: "pill", text: "signin_with" });
-  }).catch(() => { $("signin-note").textContent = "Couldn’t reach Google. Check the internet and reload."; });
+  }).catch(() => { note.textContent = "Couldn’t reach Google. Check the internet and reload."; });
 }
 
 let googlePromise = null;
@@ -158,9 +172,12 @@ function loadGoogle() {
 async function finishSignin(request) {
   try {
     state.me = await request;
+    setOffline(false);
+    await enterAccount();
     route();
+    syncNow({ pull: true });
   } catch (err) {
-    toast("Sign-in didn’t work. Try again.");
+    toast(err instanceof OfflineError ? "Connect to the internet to sign in." : "Sign-in didn’t work. Try again.");
   }
 }
 
@@ -172,12 +189,19 @@ $("name-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = $("name-input").value.trim();
   if (!name) return;
-  try {
-    state.me = await api("/api/me", { method: "PUT", data: { kidName: name } });
-    location.hash = "";
-    route();
-  } catch (err) { handleError(err); }
+  setKidName(name);
+  location.hash = "";
+  route();
 });
+
+// Names are saved on the device straight away and sent with the next sync.
+function setKidName(name) {
+  state.me.kidName = name;
+  store.set("trace:me", state.me);
+  store.set(`trace:name:${owner()}`, name);
+  renderTopbar();
+  syncNow();
+}
 
 // ---------- Top bar and profile ----------
 
@@ -186,13 +210,15 @@ function renderTopbar() {
   const name = state.me.kidName || "";
   $("who-initial").textContent = name.slice(0, 1).toUpperCase();
   $("who-name").textContent = name;
-  $("stat-drawings").textContent = state.me.stats.drawings;
-  $("stat-time").textContent = formatTime(state.me.stats.seconds + state.pendingSeconds);
+  // Until this device has fetched the account's drawings once, the server's count is the right one.
+  const pulled = store.get(`trace:pulled:${owner()}`, false);
+  $("stat-drawings").textContent = pulled && state.localCount !== null ? state.localCount : state.me.stats.drawings;
+  $("stat-time").textContent = formatTime(state.me.stats.seconds + pendingSeconds());
 }
 
 $("who").addEventListener("click", () => {
   $("profile-name").value = state.me.kidName || "";
-  $("profile-today").textContent = `Today: ${formatTime(state.me.stats.todaySeconds + state.pendingSeconds)}`;
+  $("profile-today").textContent = `Today: ${formatTime(state.me.stats.todaySeconds + (state.usage[utcDay()] || 0))}`;
   $("profile-email").textContent = state.me.email ? `Signed in as ${state.me.email}` : "";
   $("profile").showModal();
 });
@@ -204,27 +230,110 @@ $("profile").addEventListener("click", (e) => { if (e.target === $("profile")) $
 $("profile-form").addEventListener("submit", async () => {
   const name = $("profile-name").value.trim();
   if (!name || name === state.me.kidName) return;
-  try {
-    state.me = await api("/api/me", { method: "PUT", data: { kidName: name } });
-    renderTopbar();
-  } catch (err) { handleError(err); }
+  setKidName(name);
 });
 
 $("signout").addEventListener("click", async () => {
   $("profile").close();
+  // Signing out has to reach the server, or the next visit would sign straight back in.
+  if (!navigator.onLine) { toast("Connect to the internet to sign out."); return; }
   await saveNow();
-  await flushUsage();
-  try { await api("/api/auth/logout", { method: "POST" }); } catch { /* already out */ }
+  await syncNow();
+  const who = owner();
+  try {
+    await api("/api/auth/logout", { method: "POST" });
+  } catch (err) {
+    if (err instanceof OfflineError) { toast("Connect to the internet to sign out."); return; }
+  }
   try { google.accounts.id.disableAutoSelect(); } catch { /* not loaded */ }
+  // Drawings already on the server leave this device. Anything not sent yet
+  // stays (only this account can see it) and goes up when they sign in again.
+  for (const record of await allDrawings(who)) {
+    if (!record.dirty) await deleteDrawingRecord(record.cid);
+  }
+  store.set(`trace:pulled:${who}`, false);
+  store.set("trace:me", null);
+  state.localCount = null;
   location.hash = "";
   showSignin();
 });
 
 function handleError(err) {
   if (err instanceof AuthError) { showSignin(); return; }
+  if (err instanceof OfflineError) { setOffline(true); return; }
   console.error(err);
-  toast("Couldn’t save. Check the internet.");
+  toast("Couldn’t save. Try again.");
 }
+
+// The little cloud in the top bar: shown while there's no internet.
+function setOffline(offline) {
+  state.offline = offline;
+  $("offline").hidden = !offline;
+}
+
+async function refreshCount() {
+  if (!state.me) return;
+  try { state.localCount = await countDrawings(owner()); } catch { state.localCount = null; }
+  renderTopbar();
+}
+
+// ---------- Syncing with the account ----------
+
+let syncing = null;
+let syncAgain = false;
+let syncTimer = 0;
+let lastPull = 0;
+
+function scheduleSync(ms = 1500) {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncNow(), ms);
+}
+
+async function syncNow({ pull = false } = {}) {
+  if (!state.me) return;
+  if (syncing) {
+    syncAgain = true;
+    return syncing;
+  }
+  const who = owner();
+  syncing = (async () => {
+    try {
+      await sendName(who);
+      const stats = await pushDrawings(who);
+      if (stats && owner() === who) state.me.stats = stats;
+      if (pull || Date.now() - lastPull > PULL_EVERY_MS) {
+        lastPull = Date.now();
+        const changed = await pullDrawings(who);
+        store.set(`trace:pulled:${who}`, true);
+        if (changed && owner() === who && !$("history").hidden) showHistory();
+      }
+      await flushUsage(who);
+      if (owner() === who) store.set("trace:me", state.me);
+      setOffline(false);
+    } catch (err) {
+      if (err instanceof OfflineError) setOffline(true);
+      else if (err instanceof AuthError) showSignin();
+      else console.error(err);
+    } finally {
+      syncing = null;
+      await refreshCount();
+      if (syncAgain) { syncAgain = false; scheduleSync(0); }
+    }
+  })();
+  return syncing;
+}
+
+async function sendName(who) {
+  const name = store.get(`trace:name:${who}`, null);
+  if (!name) return;
+  const me = await api("/api/me", { method: "PUT", data: { kidName: name } });
+  if (store.get(`trace:name:${who}`, null) === name) store.set(`trace:name:${who}`, null);
+  if (owner() === who) state.me = { ...me, kidName: state.me.kidName };
+}
+
+window.addEventListener("online", () => syncNow({ pull: true }));
+window.addEventListener("offline", () => setOffline(true));
+setInterval(() => syncNow(), SYNC_EVERY_MS);
 
 // ---------- Time spent ----------
 
@@ -235,32 +344,36 @@ for (const type of ["pointerdown", "keydown"]) {
 setInterval(() => {
   if (!state.me || !state.me.kidName || document.visibilityState !== "visible") return;
   if (Date.now() - state.lastActivity > IDLE_MS) return;
-  state.pendingSeconds += 1;
+  const day = utcDay();
+  state.usage[day] = (state.usage[day] || 0) + 1;
+  store.set(`trace:usage:${owner()}`, state.usage);
   if (!draw.hidden && state.animal && !state.readOnly) state.drawingSeconds += 1;
   renderTopbar();
 }, 1000);
 
-setInterval(() => { flushUsage(); }, USAGE_FLUSH_MS);
+function pendingSeconds() {
+  return Object.values(state.usage).reduce((a, b) => a + b, 0);
+}
 
-async function flushUsage(keepalive = false) {
-  const seconds = Math.min(120, state.pendingSeconds);
-  if (!seconds || !state.me) return;
-  state.pendingSeconds -= seconds;
-  try {
-    const stats = await api("/api/usage", { method: "POST", data: { seconds }, keepalive });
-    state.me.stats = stats;
-  } catch (err) {
-    state.pendingSeconds += seconds; // try again next time
-    if (err instanceof AuthError) showSignin();
+// Sends time spent, in chunks the server accepts, with the day it was spent on.
+async function flushUsage(who) {
+  for (const day of Object.keys(state.usage)) {
+    while (owner() === who && (state.usage[day] || 0) > 0) {
+      const seconds = Math.min(120, state.usage[day]);
+      const stats = await api("/api/usage", { method: "POST", data: { seconds, day } });
+      if (owner() !== who) return;
+      state.usage[day] -= seconds;
+      if (state.usage[day] <= 0) delete state.usage[day];
+      store.set(`trace:usage:${who}`, state.usage);
+      state.me.stats = stats;
+    }
   }
   renderTopbar();
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") {
-    flushUsage(true);
-    saveNow(true);
-  }
+  if (document.visibilityState === "hidden") saveNow();
+  else syncNow({ pull: Date.now() - lastPull > 30_000 });
 });
 
 // ---------- Screens ----------
@@ -305,7 +418,7 @@ function pageFor(hash) {
   const group = hash.match(/^c\/(\w+)$/);
   const category = group && CATEGORIES.find((c) => c.id === group[1]);
   if (category) return [`/trace/group/${category.id}`, category.name || category.id];
-  const existing = hash.match(/^([de])\/\d+$/);
+  const existing = hash.match(/^([de])\/[\w-]+$/);
   if (existing) return existing[1] === "d" ? ["/trace/drawing/view", "View drawing"] : ["/trace/drawing/edit", "Drawing"];
   const animal = ANIMALS.find((a) => a.id === hash);
   if (animal) return [`/trace/draw/${animal.id}`, animal.name || animal.id];
@@ -333,11 +446,12 @@ async function route() {
   if (category) return showCategory(category);
 
   // #d/<id> views a saved drawing; #e/<id> keeps editing the drawing in progress.
-  const existing = hash.match(/^([de])\/(\d+)$/);
-  if (existing) return openDrawing(Number(existing[2]), existing[1] === "d");
+  // Plain numbers are links from before drawings had device ids.
+  const existing = hash.match(/^([de])\/([\w-]+)$/);
+  if (existing) return openDrawing(/^\d+$/.test(existing[2]) ? `s${existing[2]}` : existing[2], existing[1] === "d");
 
   const animal = ANIMALS.find((a) => a.id === hash);
-  if (animal) return startDrawing(animal, null, [], 0);
+  if (animal) return startDrawing(animal);
 
   show("home");
 }
@@ -348,8 +462,9 @@ async function showHistory() {
   list.innerHTML = "";
   let drawings = [];
   try {
-    ({ drawings } = await api("/api/drawings"));
+    drawings = (await allDrawings(owner())).filter((d) => !d.deleted).sort((a, b) => b.createdAt - a.createdAt);
   } catch (err) { handleError(err); return; }
+  if ($("history").hidden) return;
   $("history-empty").hidden = drawings.length > 0;
 
   const byDay = new Map();
@@ -366,8 +481,8 @@ async function showHistory() {
           const animal = ANIMALS.find((a) => a.id === d.animal);
           const when = stamp(d.createdAt);
           const img = d.thumb ? `<img src="${d.thumb}" alt="">` : `<img alt="">`;
-          return `<li class="past-item" data-id="${d.id}">
-                    <a class="past" style="--tint:${animal?.tint || "#eee"}" href="#d/${d.id}"
+          return `<li class="past-item" data-id="${d.cid}">
+                    <a class="past" style="--tint:${animal?.tint || "#eee"}" href="#d/${d.cid}"
                       aria-label="${animal?.name || d.animal}, ${when}">${img}<span>${when}</span></a>
                     <button class="icon-btn trash" aria-label="Delete drawing"><svg viewBox="0 0 24 24"><path d="M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 21 H17 L18 7 M10 11 V17 M14 11 V17"/></svg></button>
                   </li>`;
@@ -398,10 +513,14 @@ function twoTap(button, action) {
   action();
 }
 
-async function deleteDrawing(id) {
-  const res = await api(`/api/drawings/${id}`, { method: "DELETE" });
-  state.me.stats = res.stats;
-  renderTopbar();
+// Marked as deleted here; the next sync deletes it on the server too.
+async function deleteDrawing(cid) {
+  const record = await getDrawing(cid);
+  if (record && !record.deleted) {
+    await putDrawing({ ...record, deleted: true, dirty: 1, rev: record.rev + 1, updatedAt: Date.now() });
+  }
+  await refreshCount();
+  scheduleSync(0);
 }
 
 $("history-list").addEventListener("click", (e) => {
@@ -410,7 +529,7 @@ $("history-list").addEventListener("click", (e) => {
   const item = button.closest(".past-item");
   twoTap(button, async () => {
     try {
-      await deleteDrawing(Number(item.dataset.id));
+      await deleteDrawing(item.dataset.id);
       const day = item.closest(".day");
       item.remove();
       if (!day.querySelector(".past-item")) day.remove();
@@ -428,26 +547,31 @@ function dayLabel(date) {
     year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
 }
 
-async function openDrawing(id, readOnly) {
+async function openDrawing(cid, readOnly) {
   try {
-    const { drawing } = await api(`/api/drawings/${id}`);
-    const animal = ANIMALS.find((a) => a.id === drawing.animal);
-    if (!animal) throw new Error("Unknown animal");
-    startDrawing(animal, drawing.id, drawing.strokes, drawing.seconds, readOnly);
-    $("view-date").textContent = stamp(drawing.createdAt);
+    let record = await getDrawing(cid);
+    if (!record && !state.offline) {
+      await syncNow({ pull: true }); // made on another device, not fetched yet
+      record = await getDrawing(cid);
+    }
+    const animal = record && ANIMALS.find((a) => a.id === record.animal);
+    if (!animal || record.deleted || record.owner !== owner()) throw new Error("Drawing not found");
+    startDrawing(animal, record, readOnly);
+    $("view-date").textContent = stamp(record.createdAt);
   } catch (err) {
     handleError(err);
     location.hash = "history";
   }
 }
 
-function startDrawing(animal, id, strokes, seconds, readOnly = false) {
+function startDrawing(animal, record = null, readOnly = false) {
   state.readOnly = readOnly;
   draw.classList.toggle("readonly", readOnly);
   state.animal = animal;
-  state.drawingId = id;
-  state.strokes = strokes;
-  state.drawingSeconds = seconds;
+  state.cid = record ? record.cid : null;
+  state.createdAt = record ? record.createdAt : null;
+  state.strokes = record ? record.strokes : [];
+  state.drawingSeconds = record ? record.seconds : 0;
   state.cleared = null;
   state.current = null;
   state.dirty = false;
@@ -473,7 +597,7 @@ function layout() {
 $("view-delete").addEventListener("click", (e) => {
   twoTap(e.currentTarget, async () => {
     try {
-      await deleteDrawing(state.drawingId);
+      await deleteDrawing(state.cid);
       state.animal = null;
       location.hash = "history";
     } catch (err) { handleError(err); }
@@ -491,41 +615,57 @@ function scheduleSave() {
   saveTimer = setTimeout(() => saveNow(), SAVE_DELAY_MS);
 }
 
-async function saveNow(keepalive = false) {
+// Drawings are saved on the device first, then sent by the next sync.
+async function saveNow() {
   clearTimeout(saveTimer);
   if (saving) await saving;
   if (!state.dirty || !state.animal || !state.me) return;
   state.dirty = false;
   const animal = state.animal;
   const strokes = state.strokes;
-  const id = state.drawingId;
+  const who = owner();
+  // A new drawing gets its id now, and its own address so a reload reopens it.
+  if (!state.cid && strokes.length) {
+    state.cid = newId();
+    state.createdAt = Date.now();
+    if (location.hash === `#${animal.id}`) history.replaceState(null, "", `#e/${state.cid}`);
+  }
+  const cid = state.cid;
+  const createdAt = state.createdAt;
+  const seconds = state.drawingSeconds;
+  if (!cid) return;
   saving = (async () => {
     try {
+      const existing = await getDrawing(cid);
       if (!strokes.length) {
-        // Cleared drawings are removed rather than kept as blank pages.
-        if (id) {
-          const res = await api(`/api/drawings/${id}`, { method: "DELETE", keepalive });
-          if (state.drawingId === id) state.drawingId = null;
-          state.me.stats = res.stats;
+        // Cleared drawings are removed rather than kept as blank pages
+        // (undo brings it back under the same id).
+        if (existing && !existing.deleted) {
+          await putDrawing({ ...existing, deleted: true, dirty: 1, rev: existing.rev + 1, updatedAt: Date.now() });
         }
-        return;
+      } else {
+        await putDrawing({
+          cid,
+          owner: who,
+          animal: animal.id,
+          strokes,
+          thumb: await thumbnail(animal, strokes),
+          seconds,
+          createdAt,
+          updatedAt: Date.now(),
+          rev: (existing?.rev || 0) + 1,
+          dirty: 1,
+          deleted: false,
+          onServer: existing?.onServer || false,
+        });
       }
-      const data = { animal: animal.id, strokes, seconds: state.drawingSeconds, thumb: await thumbnail(animal, strokes) };
-      const res = id
-        ? await api(`/api/drawings/${id}`, { method: "PUT", data, keepalive })
-        : await api("/api/drawings", { method: "POST", data, keepalive });
-      state.me.stats = res.stats;
-      // Still on this new drawing: give it its own address so a reload reopens it.
-      if (!id && state.animal === animal && state.drawingId === null && location.hash === `#${animal.id}`) {
-        state.drawingId = res.drawing.id;
-        history.replaceState(null, "", `#e/${res.drawing.id}`);
-      }
+      await refreshCount();
+      scheduleSync();
     } catch (err) {
       if (state.animal === animal) state.dirty = true;
       handleError(err);
     } finally {
       saving = null;
-      renderTopbar();
     }
   })();
   return saving;
@@ -809,5 +949,9 @@ buildHome();
 buildTools();
 syncTools();
 window.addEventListener("hashchange", route);
+// Keeps Trace working with no internet (see sw.js).
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch((err) => console.warn("Offline mode unavailable", err));
+}
 new ResizeObserver(layout).observe(stageWrap);
 boot();

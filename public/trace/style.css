@@ -120,6 +120,8 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
 }
 .stat svg { width: 24px; height: 24px; fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .stat b { font-variant-numeric: tabular-nums; }
+.stat.offline svg { stroke: var(--muted); }
+.stat[hidden] { display: none; }
 
 .tabs { display: flex; gap: 6px; background: var(--soft); border-radius: 999px; padding: 4px; }
 .tab {
@@ -161,6 +163,25 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
 .welcome h1 { margin: 0; font-size: 40px; font-weight: 800; }
 .logo { width: 96px; height: 96px; }
 .google-btn { min-height: 44px; }
+.apple-slot { display: flex; justify-content: center; }
+.apple-slot:empty { display: none; }
+.apple-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 200px;
+  min-height: 40px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  background: #000;
+  color: #fff;
+  font: 500 15px/1 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  cursor: pointer;
+}
+.apple-btn svg { width: 15px; height: 18px; margin-top: -2px; }
+
 
 #name-form { flex-direction: row; flex-wrap: wrap; justify-content: center; max-width: 640px; }
 #name-form h1 { width: 100%; }
