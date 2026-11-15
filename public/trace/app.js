@@ -535,7 +535,7 @@ const guideImages = new Map();
 function guideImage(animal) {
   if (!guideImages.has(animal.id)) {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="256" height="256">
-      <style>path,circle,ellipse{fill:#fff;stroke:#c5cbd6;stroke-width:14;stroke-linecap:round;stroke-linejoin:round}.dot{fill:#c5cbd6;stroke:none}</style>
+      <style>path,circle,ellipse{fill:#fff;stroke:#c5cbd6;stroke-width:14;stroke-linecap:round;stroke-linejoin:round}.dot{fill:#c5cbd6;stroke:none}.line{fill:none}</style>
       ${animal.shapes.join("")}</svg>`;
     guideImages.set(animal.id, new Promise((resolve) => {
       const img = new Image();
