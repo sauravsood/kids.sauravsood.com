@@ -11,7 +11,7 @@
 // 20 MB) is cached the first time it's used, in a cache of its own that
 // survives VERSION bumps. Change MODELS when those files change.
 
-const VERSION = "trace-v2";
+const VERSION = "trace-v3";
 const MODELS = "trace-models-v1";
 const FILES = [
   "./",
@@ -19,6 +19,7 @@ const FILES = [
   "sync.js",
   "local.js",
   "photo.js",
+  "story.js",
   "animals.js",
   "style.css",
   "manifest.webmanifest",

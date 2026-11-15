@@ -3,6 +3,7 @@ import { ANIMALS, CATEGORIES, animalSvg } from "./animals.js";
 import { AuthError, OfflineError, api, pullDrawings, pullMine, pushDrawings, pushMine, validMine } from "./sync.js";
 import { allDrawings, allMine, countDrawings, deleteDrawingRecord, deleteMineRecord, getDrawing, getMine, keepStorage, newAnimalId, newId, putDrawing, putMine } from "./local.js";
 import { NoAnimalError, photoToOutline, prepareModel } from "./photo.js";
+import { closeStory, openStory } from "./story.js";
 import { appleButton, appleSignInFailed } from "/shared/apple.js";
 
 // Drawing happens in a 1000 x 1000 space that matches the animal outlines,
@@ -616,6 +617,7 @@ function pageFor(hash) {
 }
 
 async function route() {
+  closeStory();
   await saveNow();
   state.animal = null;
   trackPage(...pageFor(location.hash.slice(1)));
@@ -880,6 +882,60 @@ function guideImage(animal) {
   }
   return guideImages.get(animal.id);
 }
+
+// ---------- Animate now ----------
+
+// The child's animal as a picture for the storybook: the outline in solid
+// lines, their crayon on top, cut out on a clear background.
+function solidOutline(animal) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="800" height="800">
+    <style>path,circle,ellipse{fill:#fff;stroke:#3a3f4b;stroke-width:16;stroke-linecap:round;stroke-linejoin:round}.dot{fill:#3a3f4b;stroke:none}.line{fill:none}</style>
+    ${animal.shapes.join("")}</svg>`;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  });
+}
+
+async function storyCharacter(animal, strokes) {
+  const size = 800;
+  const [ink, ictx] = (() => { const c = document.createElement("canvas"); c.width = c.height = size; return [c, c.getContext("2d")]; })();
+  for (const s of strokes) paintStroke(ictx, s);
+  const full = document.createElement("canvas");
+  full.width = full.height = size;
+  const fctx = full.getContext("2d", { willReadFrequently: true });
+  const outline = await solidOutline(animal);
+  if (outline) fctx.drawImage(outline, 0, 0, size, size);
+  fctx.drawImage(ink, 0, 0);
+  // Trim the empty edges so the animal fills its spot in each scene.
+  const { data } = fctx.getImageData(0, 0, size, size);
+  let x0 = size, y0 = size, x1 = 0, y1 = 0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (data[(y * size + x) * 4 + 3] < 10) continue;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  if (x1 <= x0) return { url: full.toDataURL("image/png") };
+  const side = Math.max(x1 - x0, y1 - y0) + 16;
+  const out = document.createElement("canvas");
+  out.width = out.height = side;
+  out.getContext("2d").drawImage(full, (x0 + x1) / 2 - side / 2, (y0 + y1) / 2 - side / 2, side, side, 0, 0, side, side);
+  return { url: out.toDataURL("image/png") };
+}
+
+$("animate").addEventListener("click", async () => {
+  const animal = state.animal;
+  if (!animal) return;
+  const strokes = state.strokes;
+  saveNow();
+  const img = await storyCharacter(animal, strokes);
+  if (state.animal !== animal) return;
+  openStory(img, animal, state.me?.kidName || "", (book) =>
+    trackPage(`/trace/story/${book}`, book === "shelf" ? "Stories" : `Story: ${book}`));
+});
 
 async function thumbnail(animal, strokes) {
   const size = 256;
