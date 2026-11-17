@@ -90,8 +90,9 @@
 
   // Feedback bubble (public/feedback/bubble.js): small and quiet here, it
   // asks the grown-up sum before the form opens, and it stays off the
-  // full-screen apps themselves (only the hub and each app's front page).
-  const inApp = /\/app\/|^\/sky\/view\/|^\/dino\/museum\//.test(location.pathname);
+  // full-screen apps themselves (only the hub and each app's front page;
+  // Trace is a full-screen app at /trace/ itself).
+  const inApp = /\/app\/|^\/sky\/view\/|^\/dino\/museum\/|^\/trace\//.test(location.pathname);
   if (!inApp && window.top === window && !document.querySelector('script[src*="/feedback/bubble.js"]')) {
     const fb = document.createElement("script");
     fb.src = "/feedback/bubble.js";

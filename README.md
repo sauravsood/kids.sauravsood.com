@@ -45,6 +45,12 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - **Works offline.** `public/trace/sw.js` (a service worker) keeps the page, code, outlines and icons on the device: network first with a 2.5 s wait, cache otherwise. Add any new file Trace needs to its `FILES` list and bump `VERSION`.
 - **Saves on the device, syncs later.** Drawings go to IndexedDB first (`local.js`), keyed by an id made on the device and by account, so two grown-ups on one iPad stay apart. `sync.js` sends changes (`PUT`/`DELETE /api/drawings/c/<id>`, newest edit wins, safe to repeat) and pulls drawings from other devices (`GET /api/drawings?meta=1`, then `?ids=…`). It runs after each save, every 30 s, when the internet comes back and when the app is reopened. Time spent and name changes wait in `localStorage` and are sent with the day they happened. A cloud-with-a-line icon in the top bar means "offline, saved here". Signing in and out need the internet.
 
+### Kids (Trace)
+
+- Tap the child's name in the top bar to see every child in the family as a coloured circle. Tapping a circle switches to that child; **+ Add** asks the grown-up sum (`/shared/grownup.js`) and then a name. Switching and adding need the internet; whatever the current child made is sent first.
+- Each extra child is a `users` row of its own (`family_id` = the grown-up's row, `google_sub` = `kid:…`, never signed in to), so drawings, time, My Animals and Pocket Money / Routines state stay apart with no change to those tables. The grown-up's own row is the first child. `sessions.kid_id` is the child picked on that device and `users.last_kid` is the one the next sign-in starts with. Up to 8 children.
+- `POST /api/kids` `{ name }` adds a child and switches to them; `POST /api/kids/switch` `{ kid }` switches. `/api/me` lists `kids`. Trace sends `X-Kid: <account>` with every sync request, so a sync already on its way when someone switches still lands on the right child. Signing out clears every child's synced drawings from the device.
+
 ### My Animals (Trace)
 
 - A sixth group, **My Animals**, starts empty with a big camera button. On an iPad or phone it opens the camera (`<input type="file" accept="image/*" capture="environment">`); on a computer it opens a file picker.

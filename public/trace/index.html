@@ -168,6 +168,7 @@
 
   <dialog id="profile" class="sheet">
     <form id="profile-form" method="dialog">
+      <ul id="kids" class="kids" aria-label="Kids"></ul>
       <input id="profile-name" class="name-input" maxlength="30" autocomplete="off" autocapitalize="words" spellcheck="false" required aria-label="Name">
       <p id="profile-today" class="note"></p>
       <p id="profile-email" class="note"></p>
@@ -175,6 +176,18 @@
         <button id="signout" type="button" class="pill ghost">Sign out</button>
         <button id="profile-cancel" type="button" class="pill ghost">Cancel</button>
         <button type="submit" class="pill">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Adding a kid (after the grown-up sum). -->
+  <dialog id="kid-new" class="sheet">
+    <form id="kid-new-form">
+      <span class="initial big" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5 V19 M5 12 H19"/></svg></span>
+      <input id="kid-new-name" class="name-input" maxlength="30" autocomplete="off" autocapitalize="words" spellcheck="false" required placeholder="Name" aria-label="New kid’s name">
+      <div class="sheet-row">
+        <button id="kid-new-cancel" type="button" class="pill ghost">Cancel</button>
+        <button type="submit" class="pill">Add</button>
       </div>
     </form>
   </dialog>
@@ -237,6 +250,7 @@
   <div id="toast" class="toast" role="status" hidden></div>
   <div id="confetti" class="confetti" aria-hidden="true"></div>
 
+  <script src="/shared/grownup.js" defer></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

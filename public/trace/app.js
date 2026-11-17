@@ -52,7 +52,7 @@ const committed = document.createElement("canvas");
 const cctx = committed.getContext("2d");
 
 const state = {
-  me: null,             // { account, kidName, email, stats }; kept on the device for offline use
+  me: null,             // { account, kidName, email, kids, stats }; kept on the device for offline use
   config: null,
   animal: null,
   cid: null,            // this drawing's id once it has been saved (made on the device)
@@ -234,6 +234,7 @@ function renderTopbar() {
   if (!state.me) return;
   const name = state.me.kidName || "";
   $("who-initial").textContent = name.slice(0, 1).toUpperCase();
+  $("who-initial").style.background = kidColor(state.me.account);
   $("who-name").textContent = name;
   // Until this device has fetched the account's drawings once, the server's count is the right one.
   const pulled = store.get(`trace:pulled:${owner()}`, false);
@@ -242,6 +243,7 @@ function renderTopbar() {
 }
 
 $("who").addEventListener("click", () => {
+  renderKids();
   $("profile-name").value = state.me.kidName || "";
   $("profile-today").textContent = `Today: ${formatTime(state.me.stats.todaySeconds + (state.usage[utcDay()] || 0))}`;
   $("profile-email").textContent = state.me.email ? `Signed in as ${state.me.email}` : "";
@@ -258,6 +260,97 @@ $("profile-form").addEventListener("submit", async () => {
   setKidName(name);
 });
 
+// ---------- Kids: switch between them, or add one ----------
+
+// Each child has their own colour, so a child who can't read yet can still
+// find their own circle.
+const KID_COLORS = ["#ff9f1c", "#2f6bff", "#1fb36b", "#9b5de5", "#ff70a6", "#3ec5ff", "#8d5a3b", "#d6455d"];
+function kidList() {
+  const kids = state.me?.kids?.length ? state.me.kids : [{ id: state.me?.account, name: state.me?.kidName }];
+  // This child's name as typed here, even before it has been sent.
+  return kids.map((k) => (String(k.id) === owner() ? { ...k, name: state.me.kidName } : k)).filter((k) => k.name);
+}
+function kidColor(id) {
+  const i = (state.me?.kids || []).findIndex((k) => String(k.id) === String(id));
+  return KID_COLORS[Math.max(0, i) % KID_COLORS.length];
+}
+const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+function renderKids() {
+  $("kids").innerHTML = kidList().map((k) => {
+    const on = String(k.id) === owner();
+    return `<li><button type="button" class="kid${on ? " on" : ""}" data-kid="${escapeHtml(k.id)}"${on ? ' aria-current="true"' : ""}>
+      <span class="initial" style="background:${kidColor(k.id)}">${escapeHtml(k.name.slice(0, 1).toUpperCase())}</span>
+      <span class="kid-name">${escapeHtml(k.name)}</span></button></li>`;
+  }).join("") + `<li><button type="button" class="kid add" id="kid-add">
+      <span class="initial"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5 V19 M5 12 H19"/></svg></span>
+      <span class="kid-name">Add</span></button></li>`;
+}
+
+$("kids").addEventListener("click", (e) => {
+  const button = e.target.closest("button");
+  if (!button) return;
+  if (button.id === "kid-add") addKid();
+  else switchKid(button.dataset.kid);
+});
+
+// Switching is for the children too (like picking your own peg). It needs
+// the internet, so everything made by this child is sent first.
+async function switchKid(id) {
+  $("profile").close();
+  if (String(id) === owner()) return;
+  if (!navigator.onLine) { toast("Connect to the internet to switch."); return; }
+  await saveNow();
+  await syncNow();
+  try {
+    await becomeKid(await api("/api/kids/switch", { method: "POST", data: { kid: Number(id) } }));
+  } catch (err) {
+    if (err instanceof AuthError) showSignin();
+    else toast(err instanceof OfflineError ? "Connect to the internet to switch." : "Couldn’t switch. Try again.");
+  }
+}
+
+// Adding a child is for grown-ups: the same sum as links that leave the site.
+async function addKid() {
+  $("profile").close();
+  if (!navigator.onLine) { toast("Connect to the internet to add a kid."); return; }
+  if (typeof window.askGrownUp === "function") await window.askGrownUp("Adding a kid is for grown-ups.", "Next");
+  $("kid-new-name").value = "";
+  $("kid-new").showModal();
+  setTimeout(() => $("kid-new-name").focus(), 50);
+}
+
+$("kid-new-cancel").addEventListener("click", () => $("kid-new").close());
+$("kid-new").addEventListener("click", (e) => { if (e.target === $("kid-new")) $("kid-new").close(); });
+$("kid-new-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("kid-new-name").value.trim();
+  if (!name) return;
+  $("kid-new").close();
+  await saveNow();
+  await syncNow();
+  try {
+    await becomeKid(await api("/api/kids", { method: "POST", data: { name } }));
+  } catch (err) {
+    if (err instanceof AuthError) showSignin();
+    else if (err instanceof OfflineError) toast("Connect to the internet to add a kid.");
+    else toast(err.status === 409 ? "That’s the most kids for one account." : "Couldn’t add. Try again.");
+  }
+});
+
+// Carries on as another child: their drawings, animals and time, from the top.
+async function becomeKid(me) {
+  await saveNow();
+  state.me = me;
+  state.mine = new Map();
+  state.localCount = null;
+  setOffline(false);
+  await enterAccount();
+  if (location.hash) location.hash = "";
+  else route();
+  syncNow({ pull: true });
+}
+
 $("signout").addEventListener("click", async () => {
   $("profile").close();
   // Signing out has to reach the server, or the next visit would sign straight back in.
@@ -265,6 +358,7 @@ $("signout").addEventListener("click", async () => {
   await saveNow();
   await syncNow();
   const who = owner();
+  const everyone = [...new Set([who, ...(state.me.kids || []).map((k) => String(k.id))])];
   try {
     await api("/api/auth/logout", { method: "POST" });
   } catch (err) {
@@ -273,14 +367,17 @@ $("signout").addEventListener("click", async () => {
   try { google.accounts.id.disableAutoSelect(); } catch { /* not loaded */ }
   // Drawings already on the server leave this device. Anything not sent yet
   // stays (only this account can see it) and goes up when they sign in again.
-  for (const record of await allDrawings(who)) {
-    if (!record.dirty) await deleteDrawingRecord(record.cid);
-  }
-  for (const record of await allMine(who)) {
-    if (!record.dirty) await deleteMineRecord(record.cid);
+  // Every child in the family leaves this device the same way.
+  for (const kid of everyone) {
+    for (const record of await allDrawings(kid)) {
+      if (!record.dirty) await deleteDrawingRecord(record.cid);
+    }
+    for (const record of await allMine(kid)) {
+      if (!record.dirty) await deleteMineRecord(record.cid);
+    }
+    store.set(`trace:pulled:${kid}`, false);
   }
   state.mine = new Map();
-  store.set(`trace:pulled:${who}`, false);
   store.set("trace:me", null);
   state.localCount = null;
   location.hash = "";
@@ -360,7 +457,7 @@ async function syncNow({ pull = false } = {}) {
 async function sendName(who) {
   const name = store.get(`trace:name:${who}`, null);
   if (!name) return;
-  const me = await api("/api/me", { method: "PUT", data: { kidName: name } });
+  const me = await api("/api/me", { method: "PUT", data: { kidName: name }, kid: who });
   if (store.get(`trace:name:${who}`, null) === name) store.set(`trace:name:${who}`, null);
   if (owner() === who) state.me = { ...me, kidName: state.me.kidName };
 }
@@ -394,7 +491,7 @@ async function flushUsage(who) {
   for (const day of Object.keys(state.usage)) {
     while (owner() === who && (state.usage[day] || 0) > 0) {
       const seconds = Math.min(120, state.usage[day]);
-      const stats = await api("/api/usage", { method: "POST", data: { seconds, day } });
+      const stats = await api("/api/usage", { method: "POST", data: { seconds, day }, kid: who });
       if (owner() !== who) return;
       state.usage[day] -= seconds;
       if (state.usage[day] <= 0) delete state.usage[day];
