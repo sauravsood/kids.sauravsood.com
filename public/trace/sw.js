@@ -10,9 +10,13 @@
 // The My Animals outline maker (the U²-Net model and onnxruntime, about
 // 20 MB) is cached the first time it's used, in a cache of its own that
 // survives VERSION bumps. Change MODELS when those files change.
+//
+// The storybook narration (voice/*.mp3) is kept the same way, in its own
+// cache, as each page is first read aloud. Change VOICE when it's re-recorded.
 
-const VERSION = "trace-v6";
+const VERSION = "trace-v7";
 const MODELS = "trace-models-v1";
+const VOICE = "trace-voice-v1";
 const FILES = [
   "./",
   "app.js",
@@ -20,6 +24,7 @@ const FILES = [
   "local.js",
   "photo.js",
   "story.js",
+  "music.js",
   "animals.js",
   "style.css",
   "manifest.webmanifest",
@@ -45,7 +50,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     for (const key of await caches.keys()) {
-      if (key.startsWith("trace-") && key !== VERSION && key !== MODELS) await caches.delete(key);
+      if (key.startsWith("trace-") && key !== VERSION && key !== MODELS && key !== VOICE) await caches.delete(key);
     }
     await self.clients.claim();
   })());
@@ -65,6 +70,10 @@ self.addEventListener("fetch", (event) => {
   const scope = new URL(self.registration.scope).pathname;
   if (url.pathname.startsWith(`${scope}models/`) || url.pathname.startsWith(`${scope}vendor/onnxruntime/`)) {
     event.respondWith(cacheFirst(request, url.origin + url.pathname));
+    return;
+  }
+  if (url.pathname.startsWith(`${scope}voice/`)) {
+    event.respondWith(cacheFirst(request, url.origin + url.pathname, VOICE));
     return;
   }
   if (url.pathname.startsWith(scope) || url.pathname.startsWith("/shared/")) {
@@ -92,8 +101,8 @@ async function networkFirst(request, cacheKey) {
 }
 
 // Big files that rarely change: from the cache when there, else fetched once and kept.
-async function cacheFirst(request, cacheKey) {
-  const cache = await caches.open(MODELS);
+async function cacheFirst(request, cacheKey, name = MODELS) {
+  const cache = await caches.open(name);
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
   const res = await fetch(request);

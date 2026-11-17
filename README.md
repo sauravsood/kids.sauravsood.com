@@ -67,7 +67,10 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - Each book lists the animals it suits (`for` in `story.js`). Matching books come first on the shelf, most specific first, with the child's animal on the cover (a sheep gets *Baa, Baa, Black Sheep*, then *Old MacDonald*).
 - It also works from History: opening an older drawing shows the same Animate now button, so past pictures can star in a book too.
 - **Page turns** curl over like paper, with shading, using [StPageFlip](https://github.com/Nodlik/StPageFlip) 2.0.7 (MIT, vendored unchanged in `public/trace/vendor/page-flip/`). Children can also swipe or drag a corner. Only the page in view animates, and its move starts over each time it's shown.
-- **Play button** (green): reads each page aloud with the device's own voice (Web Speech API, so it works offline and needs no audio files), waits a moment, and turns the page by itself until "The end". Tap again to pause. There is no sound until it's tapped. On an iPhone the silent switch can mute it.
+- **Play button** (green): reads the book like an audiobook. A warm recorded voice says the title, then each page, while a soft music box plays the rhyme's own old tune underneath (Twinkle, Baa Baa, Row Your Boat, Old MacDonald) or a gentle lullaby pattern for rhymes that are usually spoken. The music dips while the voice speaks. After each page it waits a moment and turns the page by itself until "The end", then the music fades away. Tap again to pause. There is no sound until it's tapped, and it plays with the silent switch on.
+  - The voice is recorded ahead of time with [Kokoro-82M](https://github.com/hexgrad/kokoro) (Apache-2.0, voice `af_heart`): `public/trace/voice/<book>/<page>.mp3` (about 3 MB, 181 lines). Lines that name the child's animal have one recording per animal (`<page>-<animal>.mp3`), and `-mine` says "my animal" for a My Animal. Re-record with `scripts/voice/build.py` (instructions at its top) after changing any rhyme text, then bump `VOICE` in `sw.js`.
+  - The music is played live by `public/trace/music.js` (Web Audio, no files). Tunes are traditional and public domain.
+  - Recordings are saved for offline use the first time each page is read. If one can't be loaded, the device's own voice reads that page instead.
 - Calm: nothing turns or speaks unless the child taps, each page plays one slow move and then the animal just breathes, and every book ends on "The end" with Read again, other books, or close. Reduced-motion settings stop the movement.
 - Each book sends a page view as `/trace/story/<book>` (`/trace/story/shelf` for the book picker).
 
@@ -138,6 +141,7 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - **chessground** is GPL-3.0-or-later and **chess.js** is BSD-2-Clause; both licence files ship in `public/chess/app/vendor/`, and the chess app built on them is GPL-3.0-or-later.
 - **My Animals** uses the U²-Net small model (Xuebin Qin et al., Apache-2.0; ONNX export from rembg, MIT) and onnxruntime-web (Microsoft, MIT). Notes and licence are in `public/trace/models/README.md` and `public/trace/vendor/onnxruntime/LICENSE`.
 - **StPageFlip** (Nodlik, MIT) turns the storybook pages; its licence is in `public/trace/vendor/page-flip/LICENSE`.
+- **Kokoro-82M** (hexgrad, Apache-2.0) made the storybook narration in `public/trace/voice/`; the model isn't shipped, only the recordings.
 - **Piskel** is Apache-2.0. **Sandspiel** is MIT. Each ships its `LICENSE` in its `app/` folder and is credited on its landing page.
 - The AGPL asks that people using a modified copy over the web can get its source. Each project page links to the source of the copy running here and to this repo.
 

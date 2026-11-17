@@ -2,7 +2,8 @@
 // picture book of an old nursery rhyme (all public domain).
 //
 // Pages curl over like paper (StPageFlip, MIT, vendored unchanged). The
-// play button reads the rhyme aloud and turns the pages by itself.
+// play button reads the rhyme aloud in a recorded voice over a soft music
+// box, and turns the pages by itself.
 //
 // Calm by design: nothing moves on to the next page or makes a sound unless
 // the child taps (a page turn or the play button), each page plays one
@@ -11,6 +12,7 @@
 
 import { ANIMALS, CATEGORIES } from "./animals.js";
 import { PageFlip } from "./vendor/page-flip/page-flip.module.js";
+import { audio, startMusic, stopMusic, duck } from "./music.js";
 
 const W = 1600;
 const H = 1000;
@@ -482,13 +484,46 @@ function setLivePage(n) {
 }
 
 // ---------- Reading aloud ----------
-// The play button reads each page with the device's own voice (works
-// offline) and turns to the next page when it's done. Nothing plays until
-// it's tapped.
+// The play button reads each page in a warm recorded voice (Kokoro, made
+// ahead of time by scripts/voice/build.py into voice/), with a soft music
+// box playing the rhyme's tune underneath (music.js), and turns to the next
+// page when it's done. Page one starts with the book's title. If a recording
+// can't be loaded (offline and not saved yet), the device's own voice reads
+// instead. Nothing plays until it's tapped.
 
 let reading = false;
 let readTimer = 0;
 let readToken = 0;
+let voiceOut = null; // the recording playing now
+const clips = new Map(); // url -> Promise<AudioBuffer>
+
+// The recordings for page n: voice/<book>/<n>.mp3, or <n>-<animal>.mp3 when
+// the line names the child's animal ("mine" for a My Animal).
+function clipUrls(book, n) {
+  if (n >= book.pages.length) return ["voice/end.mp3"];
+  const page = book.pages[n];
+  const who = current.animal.mine ? "mine" : current.animal.id;
+  const line = `voice/${book.id}/${n}${page.text.length ? `-${who}` : ""}.mp3`;
+  return n === 0 ? [`voice/${book.id}/title.mp3`, line] : [line];
+}
+
+function loadClip(url) {
+  if (!clips.has(url)) {
+    const c = audio();
+    const p = fetch(url)
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then((b) => new Promise((resolve, reject) => c.decodeAudioData(b, resolve, reject)));
+    p.catch(() => clips.delete(url));
+    clips.set(url, p);
+  }
+  return clips.get(url);
+}
+
+function hushVoice() {
+  if (voiceOut) { try { voiceOut.stop(); } catch { /* done */ } voiceOut = null; }
+  try { window.speechSynthesis?.cancel(); } catch { /* none */ }
+  duck(false);
+}
 
 function pickVoice() {
   const synth = window.speechSynthesis;
@@ -502,8 +537,24 @@ function pickVoice() {
   return voices.find((v) => v.localService) || voices[0] || null;
 }
 
+// The fallback: the device's own voice.
+function speakWithDevice(text, token, done) {
+  const synth = window.speechSynthesis;
+  if (!synth || typeof SpeechSynthesisUtterance === "undefined") return;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text.replace(/E-I-E-I-O/g, "ee-eye, ee-eye, oh"));
+  const voice = pickVoice();
+  if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = "en-GB";
+  u.rate = 0.85;
+  u.pitch = 1.08;
+  u.onend = done;
+  u.onerror = done;
+  if (token === readToken && reading) synth.speak(u);
+}
+
 function readPage() {
   clearTimeout(readTimer);
+  hushVoice();
   const token = ++readToken;
   const book = current?.book;
   if (!book) return;
@@ -515,33 +566,55 @@ function readPage() {
     if (done || token !== readToken || !reading) return;
     done = true;
     clearTimeout(readTimer);
-    if (end) { setReading(false); return; }
-    // A short, calm pause, then the page turns by itself.
+    duck(false);
+    if (end) { setReading(false, 4); return; }
+    // A short, calm pause (the music carries on), then the page turns by itself.
     readTimer = setTimeout(() => {
       if (token === readToken && reading && flipBook) flipBook.flipNext();
-    }, 1400);
+    }, 1600);
   };
-  // In case the voice never says it finished (or there's no voice at all).
+  const soon = () => {
+    if (token !== readToken) return;
+    clearTimeout(readTimer);
+    readTimer = setTimeout(next, 300);
+  };
+  // In case nothing ever says it finished.
   const words = text.split(/\s+/).length;
-  readTimer = setTimeout(next, 2500 + words * 520);
-  const synth = window.speechSynthesis;
-  if (!synth || typeof SpeechSynthesisUtterance === "undefined") return;
-  synth.cancel();
-  // Let the page settle for a moment before reading it.
-  setTimeout(() => {
-    if (token !== readToken || !reading) return;
-    const u = new SpeechSynthesisUtterance(text.replace(/E-I-E-I-O/g, "ee-eye, ee-eye, oh"));
-    const voice = pickVoice();
-    if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = "en-GB";
-    u.rate = 0.85;
-    u.pitch = 1.08;
-    u.onend = () => { clearTimeout(readTimer); readTimer = setTimeout(next, 300); };
-    u.onerror = () => { clearTimeout(readTimer); readTimer = setTimeout(next, 300); };
-    synth.speak(u);
-  }, 500);
+  readTimer = setTimeout(next, 4000 + words * 700);
+
+  const c = audio(); // made here, inside the tap, so iPads allow sound
+  startMusic(book.id);
+  const urls = clipUrls(book, n);
+  // Fetch the next page's recording while this one plays.
+  if (!end) clipUrls(book, n + 1).forEach((u) => loadClip(u).catch(() => {}));
+  const settle = new Promise((r) => setTimeout(r, n === 0 ? 900 : 600)); // let the page land
+  Promise.all([c ? Promise.all(urls.map(loadClip)) : Promise.reject(new Error("no audio")), settle])
+    .then(([bufs]) => {
+      if (token !== readToken || !reading) return;
+      // Title, a breath, then the rhyme.
+      let at = c.currentTime + 0.05;
+      const total = bufs.reduce((s, b) => s + b.duration, 0) + (bufs.length - 1) * 0.8;
+      clearTimeout(readTimer);
+      readTimer = setTimeout(next, (total + 3) * 1000);
+      duck(true);
+      const parts = bufs.map((buf) => {
+        const src = c.createBufferSource();
+        src.buffer = buf;
+        src.connect(c.destination);
+        src.start(at);
+        at += buf.duration + 0.8;
+        return src;
+      });
+      parts[parts.length - 1].onended = soon;
+      voiceOut = { stop: () => parts.forEach((p) => { try { p.stop(); } catch { /* done */ } }) };
+    })
+    .catch(() => {
+      if (token !== readToken || !reading) return;
+      speakWithDevice(text, token, soon);
+    });
 }
 
-function setReading(on) {
+function setReading(on, fadeSecs = 0.6) {
   reading = on;
   $("story").classList.toggle("reading", on);
   $("story-play").setAttribute("aria-label", on ? "Pause" : "Read to me");
@@ -552,7 +625,8 @@ function setReading(on) {
   } else {
     readToken++;
     clearTimeout(readTimer);
-    try { window.speechSynthesis?.cancel(); } catch { /* none */ }
+    hushVoice();
+    stopMusic(fadeSecs);
   }
 }
 
@@ -574,12 +648,12 @@ $("story-shelf").addEventListener("click", (e) => {
 $("story-next").addEventListener("click", () => {
   if (!current?.book || !flipBook) return;
   if (current.page >= current.book.pages.length) { stopReading(); destroyBook(); showShelf(); return; }
-  if (reading) { readToken++; try { window.speechSynthesis?.cancel(); } catch { /* none */ } }
+  if (reading) { readToken++; hushVoice(); }
   flipBook.flipNext();
 });
 $("story-prev").addEventListener("click", () => {
   if (!current?.book || !flipBook || current.page === 0) return;
-  if (reading) { readToken++; try { window.speechSynthesis?.cancel(); } catch { /* none */ } }
+  if (reading) { readToken++; hushVoice(); }
   flipBook.flipPrev();
 });
 $("story-play").addEventListener("click", () => setReading(!reading));
