@@ -1,11 +1,12 @@
 // API for the kids site: Google and Apple sign-in and sessions (shared by every app),
 // Trace's saved drawings and usage stats, and one saved JSON document per
 // app for Pocket Money and My Routines. Also the site-wide feedback bubble
-// (src/feedback.js).
+// (src/feedback.js) and saved checklists for sauravsood.com pages (src/lists.js).
 // Static files in public/ are served by Cloudflare's asset handler; only
 // /api/* requests reach this Worker (see run_worker_first in wrangler.jsonc).
 
 import { FEEDBACK_SCHEMA, handleFeedback } from "./feedback.js";
+import { LISTS_SCHEMA, handleLists } from "./lists.js";
 import { APPLE, GOOGLE, TokenError, emailVerified, verifyIdToken } from "./oidc.js";
 
 const SESSION_COOKIE = "trace_session";
@@ -76,6 +77,7 @@ const SCHEMA = [
      updated_at INTEGER NOT NULL,
      PRIMARY KEY (user_id, client_id))`,
   ...FEEDBACK_SCHEMA,
+  ...LISTS_SCHEMA,
 ];
 
 // Added after the first release: drawings get an id made on the device
@@ -111,6 +113,18 @@ export default {
       } catch (err) {
         console.error(err);
         const origin = request.headers.get("Origin") || "";
+        return new Response(JSON.stringify({ error: "Something went wrong" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...(/^https:\/\/([a-z0-9-]+\.)*sauravsood\.com$/.test(origin) ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}) },
+        });
+      }
+    }
+    if (url.pathname.startsWith("/api/lists/")) {
+      const origin = request.headers.get("Origin") || "";
+      try {
+        return await handleLists(request, env, url, ensureSchema);
+      } catch (err) {
+        console.error(err);
         return new Response(JSON.stringify({ error: "Something went wrong" }), {
           status: 500,
           headers: { "Content-Type": "application/json", ...(/^https:\/\/([a-z0-9-]+\.)*sauravsood\.com$/.test(origin) ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}) },
