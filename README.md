@@ -164,3 +164,11 @@ A small chat bubble on every page of sauravsood.com and its subdomains takes an 
 - **Widget:** our fork of [Feedback Fin](https://github.com/rowyio/feedbackfin) (Apache-2.0), built to `public/feedback/feedbackfin.js`. The changes (floating bubble, name and email fields, honeypot, `beforeOpen` hook, inline errors, no outside links) are in `third_party/feedbackfin.patch`, on top of rowyio/feedbackfin `f6eea5a`. To rebuild: apply the patch, `npm install --ignore-scripts`, `node generate-form-html.js`, `npx microbundle --define process.env.NODE_ENV=production`, then copy `dist/index.umd.js` here.
 - **API:** `POST /api/feedback` (`src/feedback.js`). It only takes requests from `https://*.sauravsood.com`, drops bots that fill the hidden field, and allows 5 submissions per visitor per hour (visitors are a daily hash of the IP, not the IP itself). Every submission is saved in the D1 table `feedback`.
 - **Getting it to Claude:** with the Worker secret `FEEDBACK_GITHUB_TOKEN` set, each submission is also filed as an issue in the **private** repo in `FEEDBACK_GITHUB_REPO` (`sauravsood/site-feedback`). A scheduled task in the Claude project reads new issues and asks for accept or reject. That repo must stay private because issues include emails.
+
+## Saved checklists (sauravsood.com pages)
+
+`GET` / `PUT /api/lists/<id>` (`src/lists.js`) saves a small tick list for standalone pages on the main site. The first one is the Baby Prep Survival Kit at `sauravsood.com/baby-prep/`.
+
+- No sign-in. The page makes a long random id in the visitor's browser and keeps it in their personal link (`#me=<id>`). Whoever has the id can read and write that one list.
+- Only a first name and which boxes are ticked are stored (D1 table `lists`). Anything else in the request is dropped.
+- It only takes requests from `https://*.sauravsood.com`, and one visitor can start 40 new lists a day.
