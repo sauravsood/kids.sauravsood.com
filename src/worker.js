@@ -24,6 +24,7 @@ const MINE_ID_RE = /^my[a-z]{6,18}$/;
 const SHAPE_RE = /^<path (class="line" )?d="[MQLZ0-9 -]{3,20000}"\/>$/;
 const PHOTO_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]{100,60000}$/;
 const MAX_MINE = 500;
+const MAX_KIDS = 8;
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS users (
@@ -80,15 +81,28 @@ const SCHEMA = [
   ...LISTS_SCHEMA,
 ];
 
-// Added after the first release: drawings get an id made on the device
-// (client_id), so a drawing saved offline can be sent more than once
-// without turning into two drawings. Older drawings get "s<id>".
-async function migrate(db) {
+async function addColumn(db, table, column) {
   try {
-    await db.prepare("ALTER TABLE drawings ADD COLUMN client_id TEXT").run();
+    await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column}`).run();
   } catch (err) {
     if (!/duplicate column/i.test(String(err && err.message))) throw err;
   }
+}
+
+// Added after the first release: drawings get an id made on the device
+// (client_id), so a drawing saved offline can be sent more than once
+// without turning into two drawings. Older drawings get "s<id>".
+// Then kids: a family can have more than one child. Each extra child is a
+// users row of its own (family_id = the grown-up's row, google_sub
+// "kid:…", never signed in to), so drawings, time, My Animals and app
+// state stay apart without changing those tables. The grown-up's own row is
+// the first child. sessions.kid_id is the child picked on that device;
+// users.last_kid is the one picked last, for the next sign-in.
+async function migrate(db) {
+  await addColumn(db, "drawings", "client_id TEXT");
+  await addColumn(db, "users", "family_id INTEGER");
+  await addColumn(db, "users", "last_kid INTEGER");
+  await addColumn(db, "sessions", "kid_id INTEGER");
   await db.batch([
     db.prepare("UPDATE drawings SET client_id = 's' || id WHERE client_id IS NULL"),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS drawings_by_client ON drawings (user_id, client_id)"),
@@ -179,10 +193,25 @@ async function route(request, env, url) {
   const user = await currentUser(request, env);
 
   if (path === "/api/me" && method === "GET") return json(await profile(env, user));
+  // Kids in the family: add one (a grown-up action, behind the sum check in
+  // the app) or pick which one is using this device.
+  if (path === "/api/kids" && method === "POST") {
+    const name = kidName((await body(request)).name);
+    const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM users WHERE id = ?1 OR family_id = ?1").bind(user.parentId).first();
+    if (n >= MAX_KIDS) throw new HttpError(409, "That's a lot of kids already");
+    const kid = await env.DB.prepare(
+      `INSERT INTO users (google_sub, kid_name, family_id, created_at) VALUES (?, ?, ?, ?) RETURNING id, kid_name`)
+      .bind(`kid:${user.parentId}:${randomToken().slice(0, 16)}`, name, user.parentId, Date.now()).first();
+    return json(await profile(env, await pickKid(env, user, kid)), 201);
+  }
+  if (path === "/api/kids/switch" && method === "POST") {
+    const kid = await familyKid(env, user.parentId, (await body(request)).kid);
+    if (!kid) throw new HttpError(404, "That kid isn't on this account");
+    return json(await profile(env, await pickKid(env, user, kid)));
+  }
+
   if (path === "/api/me" && method === "PUT") {
-    const { kidName } = await body(request);
-    const name = String(kidName || "").trim().slice(0, 30);
-    if (!name) throw new HttpError(400, "Name is required");
+    const name = kidName((await body(request)).kidName);
     await env.DB.prepare("UPDATE users SET kid_name = ? WHERE id = ?").bind(name, user.id).run();
     return json(await profile(env, { ...user, kid_name: name }));
   }
@@ -375,12 +404,12 @@ async function signIn(env, sub, email, verified) {
   const now = Date.now();
   const db = env.DB;
   let user = await db.prepare(
-    `SELECT users.id, users.kid_name, users.email, users.google_sub FROM identities
+    `SELECT users.id, users.kid_name, users.email, users.google_sub, users.last_kid FROM identities
      JOIN users ON users.id = identities.user_id WHERE identities.sub = ?`).bind(sub).first();
-  user ??= await db.prepare("SELECT id, kid_name, email, google_sub FROM users WHERE google_sub = ?").bind(sub).first();
+  user ??= await db.prepare("SELECT id, kid_name, email, google_sub, last_kid FROM users WHERE google_sub = ?").bind(sub).first();
   if (!user && email && verified) {
     user = await db.prepare(
-      "SELECT id, kid_name, email, google_sub FROM users WHERE lower(email) = lower(?) ORDER BY id LIMIT 1").bind(email).first();
+      "SELECT id, kid_name, email, google_sub, last_kid FROM users WHERE lower(email) = lower(?) AND family_id IS NULL ORDER BY id LIMIT 1").bind(email).first();
     if (user) {
       await db.prepare("INSERT OR IGNORE INTO identities (sub, user_id, created_at) VALUES (?, ?, ?)").bind(sub, user.id, now).run();
     }
@@ -388,19 +417,21 @@ async function signIn(env, sub, email, verified) {
   if (!user) {
     user = await db.prepare(
       `INSERT INTO users (google_sub, email, created_at) VALUES (?, ?, ?)
-       RETURNING id, kid_name, email, google_sub`).bind(sub, email, now).first();
+       RETURNING id, kid_name, email, google_sub, last_kid`).bind(sub, email, now).first();
   } else if (user.google_sub === sub && email && email !== user.email) {
     await db.prepare("UPDATE users SET email = ? WHERE id = ?").bind(email, user.id).run();
     user.email = email;
   }
+  // Start with the child picked last time (on any device).
+  const kid = (user.last_kid && await familyKid(env, user.id, user.last_kid)) || user;
   const token = randomToken();
   const maxAge = SESSION_DAYS * 86400;
   await db.batch([
     db.prepare("DELETE FROM sessions WHERE user_id = ? AND expires_at < ?").bind(user.id, now),
-    db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
-      .bind(await sha256(token), user.id, now + maxAge * 1000),
+    db.prepare("INSERT INTO sessions (token_hash, user_id, kid_id, expires_at) VALUES (?, ?, ?, ?)")
+      .bind(await sha256(token), user.id, kid.id, now + maxAge * 1000),
   ]);
-  return { user, setCookie: cookie(token, maxAge) };
+  return { user: { id: kid.id, kid_name: kid.kid_name, email: user.email, parentId: user.id }, setCookie: cookie(token, maxAge) };
 }
 
 // Sign in with Apple, web flow. The page sets a short-lived apple_state
@@ -428,18 +459,58 @@ async function appleCallback(request, env) {
   }
 }
 
+// The signed-in grown-up and the child using this device. `id` is the
+// child's row, which every drawing, time and app query uses; `parentId` is
+// the grown-up's. Trace sends X-Kid with each request so a sync that was on
+// its way when someone switched kids still lands on the right child.
 async function currentUser(request, env) {
   const token = readCookie(request, SESSION_COOKIE);
   if (!token) throw new HttpError(401, "Not signed in");
-  const user = await env.DB.prepare(
-    `SELECT users.id, users.kid_name, users.email FROM sessions JOIN users ON users.id = sessions.user_id
-     WHERE sessions.token_hash = ? AND sessions.expires_at > ?`).bind(await sha256(token), Date.now()).first();
-  if (!user) throw new HttpError(401, "Not signed in");
-  return user;
+  const tokenHash = await sha256(token);
+  const row = await env.DB.prepare(
+    `SELECT p.id AS parent_id, p.email, p.kid_name AS parent_kid_name, k.id AS kid_id, k.kid_name
+     FROM sessions s JOIN users p ON p.id = s.user_id
+     LEFT JOIN users k ON k.id = s.kid_id AND k.family_id = p.id
+     WHERE s.token_hash = ? AND s.expires_at > ?`).bind(tokenHash, Date.now()).first();
+  if (!row) throw new HttpError(401, "Not signed in");
+  let kid = row.kid_id ? { id: row.kid_id, kid_name: row.kid_name } : { id: row.parent_id, kid_name: row.parent_kid_name };
+  const asked = request.headers.get("X-Kid");
+  if (asked && /^\d{1,12}$/.test(asked) && Number(asked) !== kid.id) {
+    kid = await familyKid(env, row.parent_id, asked);
+    if (!kid) throw new HttpError(409, "That kid isn't on this account");
+  }
+  return { id: kid.id, kid_name: kid.kid_name, email: row.email, parentId: row.parent_id, tokenHash };
+}
+
+// A child in this grown-up's family (the grown-up's own row is the first one).
+async function familyKid(env, parentId, kidId) {
+  const id = Number(kidId);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return env.DB.prepare("SELECT id, kid_name FROM users WHERE id = ?1 AND (id = ?2 OR family_id = ?2)")
+    .bind(id, parentId).first();
+}
+
+// Makes `kid` the child on this device, and the one to start with next sign-in.
+async function pickKid(env, user, kid) {
+  await env.DB.batch([
+    env.DB.prepare("UPDATE sessions SET kid_id = ? WHERE token_hash = ?").bind(kid.id, user.tokenHash),
+    env.DB.prepare("UPDATE users SET last_kid = ? WHERE id = ?").bind(kid.id, user.parentId),
+  ]);
+  return { ...user, id: kid.id, kid_name: kid.kid_name };
 }
 
 async function profile(env, user) {
-  return { account: user.id, kidName: user.kid_name || null, email: user.email || null, stats: await stats(env, user.id) };
+  const parentId = user.parentId ?? user.id;
+  const { results } = await env.DB.prepare(
+    "SELECT id, kid_name FROM users WHERE id = ?1 OR family_id = ?1 ORDER BY id").bind(parentId).all();
+  const kids = results.filter((k) => k.kid_name || k.id === user.id).map((k) => ({ id: k.id, name: k.kid_name || null }));
+  return { account: user.id, kidName: user.kid_name || null, email: user.email || null, kids, stats: await stats(env, user.id) };
+}
+
+function kidName(value) {
+  const name = String(value || "").trim().slice(0, 30);
+  if (!name) throw new HttpError(400, "Name is required");
+  return name;
 }
 
 async function stats(env, userId) {

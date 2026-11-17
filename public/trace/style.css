@@ -395,6 +395,22 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
 .sheet-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 6px; }
 #signout { color: #d63c3c; }
 
+/* Kids in the family: tap one to switch, + to add (grown-ups). */
+.kids { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: 460px; }
+.kid {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  min-width: 84px; padding: 10px 8px; border: 3px solid transparent; border-radius: 22px;
+  background: var(--paper); color: var(--ink); font: inherit; cursor: pointer; box-shadow: var(--shadow);
+}
+.kid .initial { width: 52px; height: 52px; font-size: 24px; }
+.kid.on { border-color: var(--ink); }
+.kid-name { font-weight: 800; font-size: 16px; max-width: 96px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kid.add { background: transparent; box-shadow: none; border: 3px dashed var(--soft); }
+.kid.add .initial, .initial.big { background: var(--soft); color: var(--ink); }
+.initial svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
+.initial.big { width: 64px; height: 64px; }
+.initial.big svg { width: 32px; height: 32px; }
+
 .toast {
   position: fixed;
   left: 50%;

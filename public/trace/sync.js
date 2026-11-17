@@ -8,14 +8,19 @@ import { allDrawings, allMine, deleteDrawingRecord, dirtyDrawings, getDrawing, g
 export class AuthError extends Error {}
 export class OfflineError extends Error {}
 
-export async function api(path, { method = "GET", data } = {}) {
+// `kid`: the child (account id) this request is for. Sent as X-Kid so a
+// sync that started before someone switched kids still goes to the right one.
+export async function api(path, { method = "GET", data, kid } = {}) {
+  const headers = {};
+  if (data) headers["Content-Type"] = "application/json";
+  if (kid && /^\d+$/.test(kid)) headers["X-Kid"] = kid;
   let res;
   try {
     res = await fetch(path, {
       method,
       credentials: "same-origin",
       cache: "no-store",
-      headers: data ? { "Content-Type": "application/json" } : undefined,
+      headers,
       body: data ? JSON.stringify(data) : undefined,
     });
   } catch {
@@ -41,12 +46,13 @@ export async function pushDrawings(owner) {
     try {
       if (record.deleted) {
         // Always ask the server too: a send may have been on its way when it was deleted.
-        ({ stats } = await api(`/api/drawings/c/${record.cid}`, { method: "DELETE" }));
+        ({ stats } = await api(`/api/drawings/c/${record.cid}`, { method: "DELETE", kid: owner }));
         const now = await getDrawing(record.cid);
         if (now && now.rev === record.rev) await deleteDrawingRecord(record.cid);
       } else {
         ({ stats } = await api(`/api/drawings/c/${record.cid}`, {
           method: "PUT",
+          kid: owner,
           data: {
             animal: record.animal,
             strokes: record.strokes,
@@ -71,7 +77,7 @@ export async function pushDrawings(owner) {
 // Brings this device up to date with the account. Returns true if anything
 // here changed.
 export async function pullDrawings(owner) {
-  const { drawings: remote } = await api("/api/drawings?meta=1");
+  const { drawings: remote } = await api("/api/drawings?meta=1", { kid: owner });
   const remoteById = new Map(remote.map((d) => [d.clientId, d]));
   const locals = new Map((await allDrawings(owner)).map((r) => [r.cid, r]));
   let changed = false;
@@ -93,7 +99,7 @@ export async function pullDrawings(owner) {
 
   for (let i = 0; i < wanted.length; i += 10) {
     const ids = wanted.slice(i, i + 10);
-    const { drawings } = await api(`/api/drawings?ids=${ids.join(",")}`);
+    const { drawings } = await api(`/api/drawings?ids=${ids.join(",")}`, { kid: owner });
     for (const d of drawings) {
       const now = await getDrawing(d.clientId);
       if (now && now.dirty) continue; // changed here while downloading: ours wins
@@ -136,6 +142,7 @@ export async function pushMine(owner) {
     try {
       await api(`/api/mine/${record.cid}`, {
         method: "PUT",
+        kid: owner,
         data: {
           shapes: record.shapes,
           photo: record.photo,
@@ -156,7 +163,7 @@ export async function pushMine(owner) {
 
 // Brings in My Animals made or changed on other devices. True if any changed.
 export async function pullMine(owner) {
-  const { animals: remote } = await api("/api/mine?meta=1");
+  const { animals: remote } = await api("/api/mine?meta=1", { kid: owner });
   const locals = new Map((await allMine(owner)).map((r) => [r.cid, r]));
   const wanted = remote
     .filter((d) => {
@@ -166,7 +173,7 @@ export async function pullMine(owner) {
     .map((d) => d.id);
   let changed = false;
   for (let i = 0; i < wanted.length; i += 10) {
-    const { animals } = await api(`/api/mine?ids=${wanted.slice(i, i + 10).join(",")}`);
+    const { animals } = await api(`/api/mine?ids=${wanted.slice(i, i + 10).join(",")}`, { kid: owner });
     for (const d of animals) {
       if (!validMine(d)) continue;
       const now = await getMine(d.id);
