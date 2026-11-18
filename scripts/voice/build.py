@@ -13,6 +13,7 @@ Setup (once):
 Run:
   node scripts/voice/lines.mjs > lines.json
   venv/bin/python scripts/voice/build.py lines.json kokoro.onnx package/voices
+  # just some lines, e.g. the animal names:  ... package/voices names/
 """
 
 import glob
@@ -37,6 +38,7 @@ SAY = [
     ("E-I-E-I-O", "ee eye, ee eye, oh"),
     ("t-rex", "tee rex"),
     ("T-rex", "tee rex"),
+    ("Long-neck", "long neck"),
     ("Pussy-cat", "pussy cat"),
     ("cock-horse", "cock horse"),
     ("Cock-Horse", "cock horse"),
@@ -72,13 +74,15 @@ def tidy(samples):
     return np.concatenate([lead, x, np.zeros(int(SR * 0.2))]).astype(np.float32)
 
 
-def main(lines_path, model, voices_dir):
+def main(lines_path, model, voices_dir, only=""):
     lines = json.load(open(lines_path))["lines"]
     with tempfile.TemporaryDirectory() as tmp:
         voices = {os.path.basename(f)[:-4]: np.fromfile(f, dtype=np.float32).reshape(-1, 1, 256)
                   for f in glob.glob(os.path.join(voices_dir, "*.bin"))}
         np.savez(os.path.join(tmp, "voices.npz"), **voices)
         kokoro = Kokoro(model, os.path.join(tmp, "voices.npz"))
+        if only:
+            lines = [l for l in lines if l["file"].startswith(only)]
         for i, line in enumerate(lines):
             out = os.path.join(OUT, line["file"] + ".mp3")
             os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -94,4 +98,4 @@ def main(lines_path, model, voices_dir):
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:4])
+    main(*sys.argv[1:5])

@@ -60,6 +60,10 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - **Offline:** the model and runtime (about 20 MB) are fetched the first time My Animals is opened online, and the service worker keeps them in their own cache (`trace-models-v1`, cache first). After that the camera works with no internet.
 - **Saving:** like drawings, My Animals are saved in IndexedDB first (database `trace-mine`, kept apart from the drawings database so it never needs an upgrade) and synced by `sync.js`: `PUT /api/mine/<id>` (newest edit wins, removals are `hidden: true`), `GET /api/mine?meta=1` and `?ids=…`. The server keeps them in the D1 table `my_animals`, up to 500 per account, and accepts only plain `<path>` shapes and JPEG photos, because shapes go into the page as SVG. Ids are `my` + 14 letters and double as animal ids in drawings.
 
+### Say the name (Trace)
+
+- A pink button before **Animate now** shows the animal's name ("Cat", "Triceratops", "My animal"). Tapping it says the name in the same recorded Kokoro voice as the storybooks: `public/trace/voice/names/<animal>.mp3` (`mine.mp3` for a My Animal). These come from `scripts/voice/lines.mjs` like the rhyme lines; re-record just them with `build.py ... names/`. If a recording can't be loaded, the device's own voice says it.
+
 ### Animate now (Trace)
 
 - An **Animate now** button sits under the paper on the tracing page (and when looking at a saved drawing). It turns the child's animal, with their outline in solid lines and their crayon on top, into a cut-out picture and opens a little picture book (`public/trace/story.js`).

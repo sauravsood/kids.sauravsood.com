@@ -543,7 +543,12 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
 /* ---------- Animate now ---------- */
 
 #draw { grid-template-rows: minmax(0, 1fr) auto auto; }
-.animate-row { display: flex; justify-content: center; }
+.animate-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
+.name-btn { display: inline-flex; align-items: center; gap: 10px; background: #f15bb5; font-size: 20px; padding: 12px 24px; }
+.name-btn svg { width: 28px; height: 28px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.name-btn.saying svg { animation: say 0.5s ease-in-out infinite alternate; }
+@keyframes say { to { transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) { .name-btn.saying svg { animation: none; } }
 .animate-btn { display: inline-flex; align-items: center; gap: 10px; background: #9b5de5; font-size: 20px; padding: 12px 26px; }
 .animate-btn svg { width: 28px; height: 28px; fill: none; stroke: #fff; stroke-width: 2; stroke-linejoin: round; }
 @media (min-aspect-ratio: 5/4) {
