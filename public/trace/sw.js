@@ -14,7 +14,7 @@
 // The storybook narration (voice/*.mp3) is kept the same way, in its own
 // cache, as each page is first read aloud. Change VOICE when it's re-recorded.
 
-const VERSION = "trace-v7";
+const VERSION = "trace-v8";
 const MODELS = "trace-models-v1";
 const VOICE = "trace-voice-v1";
 const FILES = [

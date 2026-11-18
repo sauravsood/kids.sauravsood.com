@@ -870,6 +870,8 @@ function startDrawing(animal, record = null, readOnly = false) {
   if (animal.photo) photo.src = animal.photo;
   else photo.removeAttribute("src");
   stage.setAttribute("aria-label", `Trace the ${animal.name.toLowerCase()}`);
+  $("say-name-text").textContent = animal.name;
+  $("say-name").setAttribute("aria-label", `Say ${animal.name.toLowerCase()}`);
   show("draw");
   layout();
 }
@@ -979,6 +981,42 @@ function guideImage(animal) {
   }
   return guideImages.get(animal.id);
 }
+
+// ---------- Say the name ----------
+
+// The button before Animate now shows the animal's name; tapping it says
+// the name in the same recorded voice as the storybooks
+// (voice/names/<id>.mp3, made by scripts/voice/build.py), or the device's
+// own voice if the recording can't be loaded.
+let nameClip = null;
+
+function sayName() {
+  const animal = state.animal;
+  if (!animal) return;
+  const btn = $("say-name");
+  if (nameClip) { nameClip.pause(); nameClip = null; }
+  try { window.speechSynthesis?.cancel(); } catch { /* none */ }
+  const done = () => btn.classList.remove("saying");
+  btn.classList.add("saying");
+  const clip = new Audio(`voice/names/${animal.mine ? "mine" : animal.id}.mp3`);
+  nameClip = clip;
+  clip.onended = done;
+  const fallback = () => {
+    if (nameClip !== clip) return;
+    nameClip = null;
+    const synth = window.speechSynthesis;
+    if (!synth || typeof SpeechSynthesisUtterance === "undefined") return done();
+    const u = new SpeechSynthesisUtterance(animal.name.replace(/T-rex/i, "tee rex").replace("-", " "));
+    u.rate = 0.85;
+    u.onend = done;
+    u.onerror = done;
+    synth.speak(u);
+  };
+  clip.onerror = fallback;
+  clip.play().catch(fallback);
+}
+
+$("say-name").addEventListener("click", sayName);
 
 // ---------- Animate now ----------
 

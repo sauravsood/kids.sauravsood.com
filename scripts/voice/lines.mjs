@@ -1,6 +1,7 @@
 // Prints every line the Trace storybooks read aloud, as JSON, for
 // scripts/voice/build.py. Lines that name the child's animal get one
-// recording per built-in animal, plus "my animal" for a My Animal.
+// recording per built-in animal, plus "my animal" for a My Animal. Each
+// animal's name is recorded on its own too (voice/names/<id>.mp3).
 //
 //   node scripts/voice/lines.mjs > /tmp/lines.json
 
@@ -18,6 +19,8 @@ const { ANIMALS } = await import("../../public/trace/animals.js");
 
 const animals = [...ANIMALS, { id: "mine", name: "My animal", mine: true }];
 const lines = [{ file: "end", text: "The end." }];
+// The name button under the tracing paper says the animal's name.
+for (const a of animals) lines.push({ file: `names/${a.mine ? "mine" : a.id}`, text: `${a.name}.` });
 for (const book of BOOKS) {
   lines.push({ file: `${book.id}/title`, text: `${book.title}.` });
   book.pages.forEach((page, n) => {
