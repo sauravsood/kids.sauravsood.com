@@ -66,6 +66,7 @@ const state = {
   cleared: null,        // strokes kept after "clear", so undo can bring them back
   current: null,
   activePointer: null,
+  lastInputAt: 0,       // when the line being drawn last moved
   penSeenAt: -Infinity, // no Pencil yet, so fingers draw straight away
   lastActivity: Date.now(),
   usage: {},            // seconds not sent yet, by UTC day: { "2026-11-15": 95 }
@@ -247,6 +248,8 @@ $("who").addEventListener("click", () => {
   $("profile-name").value = state.me.kidName || "";
   $("profile-today").textContent = `Today: ${formatTime(state.me.stats.todaySeconds + (state.usage[utcDay()] || 0))}`;
   $("profile-email").textContent = state.me.email ? `Signed in as ${state.me.email}` : "";
+  // Already opened from the Home Screen icon: no need for the install tip.
+  $("tip-install").hidden = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
   $("profile").showModal();
 });
 
@@ -503,8 +506,20 @@ async function flushUsage(who) {
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") saveNow();
-  else syncNow({ pull: Date.now() - lastPull > 30_000 });
+  if (document.visibilityState === "hidden") putAway();
+  else {
+    resetInput();
+    syncNow({ pull: Date.now() - lastPull > 30_000 });
+  }
+});
+// A tab switch, swipe home or app switch: keep the line being drawn, write a
+// quick copy that survives Safari closing the page, then save properly.
+window.addEventListener("pagehide", putAway);
+window.addEventListener("blur", () => finishStroke(true));
+window.addEventListener("pageshow", (e) => {
+  if (!e.persisted) return;
+  resetInput();
+  layout();
 });
 
 // ---------- Screens ----------
@@ -843,9 +858,16 @@ async function openDrawing(cid, readOnly) {
       await syncNow({ pull: true }); // made on another device, not fetched yet
       record = await getDrawing(cid);
     }
+    const draft = readDraft(cid);
+    let fromDraft = false;
+    if (draft && !readOnly && (!record || (!record.deleted && draft.at > record.updatedAt))) {
+      record = { ...(record || {}), ...draft, updatedAt: draft.at, deleted: false };
+      fromDraft = true;
+    }
     const animal = record && findAnimal(record.animal);
     if (!animal || record.deleted || record.owner !== owner()) throw new Error("Drawing not found");
     startDrawing(animal, record, readOnly);
+    if (fromDraft) scheduleSave();
     $("view-date").textContent = stamp(record.createdAt);
   } catch (err) {
     handleError(err);
@@ -910,6 +932,53 @@ function scheduleSave() {
   saveTimer = setTimeout(() => saveNow(), SAVE_DELAY_MS);
 }
 
+// A new drawing gets its id, and its own address so a reload reopens it.
+function ensureId() {
+  if (state.cid || !state.animal || !state.strokes.length) return;
+  state.cid = newId();
+  state.createdAt = Date.now();
+  if (location.hash === `#${state.animal.id}`) history.replaceState(null, "", `#e/${state.cid}`);
+}
+
+// IndexedDB writes are slow and can be cut off when Safari hides or closes
+// the page, so a copy of the drawing in progress also goes to localStorage,
+// which writes straight away. openDrawing() uses it if it is newer.
+const DRAFT_KEY = "trace:draft";
+function writeDraft() {
+  if (!(state.dirty || saving) || !state.animal || !state.me || state.readOnly) return;
+  ensureId();
+  if (!state.cid) return;
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      cid: state.cid,
+      owner: owner(),
+      animal: state.animal.id,
+      strokes: state.strokes,
+      seconds: state.drawingSeconds,
+      createdAt: state.createdAt,
+      at: Date.now(),
+    }));
+  } catch { /* full or blocked: the normal save still runs */ }
+}
+function readDraft(cid) {
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+    return d && d.cid === cid ? d : null;
+  } catch { return null; }
+}
+function clearDraft(cid, strokes) {
+  const d = readDraft(cid);
+  if (d && d.strokes.length <= strokes.length) {
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+  }
+}
+
+function putAway() {
+  finishStroke(true);
+  writeDraft();
+  saveNow();
+}
+
 // Drawings are saved on the device first, then sent by the next sync.
 async function saveNow() {
   clearTimeout(saveTimer);
@@ -919,12 +988,7 @@ async function saveNow() {
   const animal = state.animal;
   const strokes = state.strokes;
   const who = owner();
-  // A new drawing gets its id now, and its own address so a reload reopens it.
-  if (!state.cid && strokes.length) {
-    state.cid = newId();
-    state.createdAt = Date.now();
-    if (location.hash === `#${animal.id}`) history.replaceState(null, "", `#e/${state.cid}`);
-  }
+  ensureId();
   const cid = state.cid;
   const createdAt = state.createdAt;
   const seconds = state.drawingSeconds;
@@ -954,6 +1018,7 @@ async function saveNow() {
           onServer: existing?.onServer || false,
         });
       }
+      clearDraft(cid, strokes);
       await refreshCount();
       scheduleSync();
     } catch (err) {
@@ -1241,6 +1306,7 @@ function toWorld(e) {
 
 function startStroke(e) {
   state.activePointer = e.pointerId;
+  state.lastInputAt = performance.now();
   state.current = {
     color: state.color,
     size: state.eraser ? state.size * 1.6 : state.size,
@@ -1260,6 +1326,10 @@ canvas.addEventListener("pointerdown", (e) => {
   if (state.activePointer !== null) {
     // A palm landed first and the Pencil came down second: drop the palm mark.
     if (isPen && state.current && !state.current.pen) state.current = null;
+    // The old line never got its "lift": iPadOS took the touch for a swipe
+    // (the Home bar, Dock, Control Centre) and didn't say so. Keep that line
+    // and start the new one, so the paper never stays stuck.
+    else if (inputStuck(isPen)) finishStroke(true);
     else return;
   }
   e.preventDefault();
@@ -1268,19 +1338,38 @@ canvas.addEventListener("pointerdown", (e) => {
 
 canvas.addEventListener("pointermove", (e) => {
   if (e.pointerId !== state.activePointer || !state.current) return;
+  state.lastInputAt = performance.now();
   if (state.current.pen) state.penSeenAt = performance.now();
   const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
   for (const ev of events.length ? events : [e]) state.current.points.push(toWorld(ev));
   requestFrame();
 });
 
+// There's only one Pencil, so a second Pencil touch means the first one ended
+// unseen. A finger line that hasn't moved for a moment is treated the same way.
+function inputStuck(isPen) {
+  if (!state.current) return true;
+  if (isPen && state.current.pen) return true;
+  return performance.now() - (state.lastInputAt || 0) > 400;
+}
+
 function endStroke(e) {
   if (e.pointerId !== state.activePointer) return;
+  // A cancelled finger line is usually a palm or a swipe, so it is dropped.
+  finishStroke(e.type !== "pointercancel" || !!state.current?.pen);
+}
+
+// Ends the line being drawn, keeping it or dropping it, and frees the paper
+// for the next touch.
+function finishStroke(keep) {
+  if (state.activePointer === null && !state.current) return;
+  const id = state.activePointer;
   state.activePointer = null;
   const stroke = state.current;
   state.current = null;
-  if (!stroke) return;
-  if (e.type === "pointercancel" && !stroke.pen) { frame(); return; }
+  try { if (id !== null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id); } catch { /* ignore */ }
+  if (!stroke) { frame(); return; }
+  if (!keep || state.readOnly || !state.animal) { frame(); return; }
   stroke.points = stroke.points.map(([x, y, p]) => [Math.round(x * 10) / 10, Math.round(y * 10) / 10, Math.round(p * 100) / 100]);
   state.strokes = [...state.strokes, stroke];
   state.cleared = null;
@@ -1290,12 +1379,28 @@ function endStroke(e) {
 }
 canvas.addEventListener("pointerup", endStroke);
 canvas.addEventListener("pointercancel", endStroke);
+// Safari can drop the capture without a pointerup (a system swipe, an alert).
+canvas.addEventListener("lostpointercapture", (e) => {
+  if (e.pointerId === state.activePointer) finishStroke(true);
+});
+
+// Back from another tab or app: nothing is held down any more.
+function resetInput() {
+  if (state.activePointer !== null || state.current) finishStroke(true);
+}
 
 // iPad Safari: block scrolling, pinch zoom, double-tap zoom and the Pencil
 // magnifier while drawing.
 for (const type of ["touchstart", "touchmove", "touchend"]) {
   stage.addEventListener(type, (e) => e.preventDefault(), { passive: false });
 }
+// Around the paper too: a finger sliding on the tools or the empty space
+// shouldn't drag the page, pull it down or bounce it.
+draw.addEventListener("touchmove", (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+// More than one finger anywhere is never a drawing: stop pinch zoom.
+document.addEventListener("touchmove", (e) => {
+  if (e.touches.length > 1 && e.cancelable) e.preventDefault();
+}, { passive: false });
 for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
   document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
 }
