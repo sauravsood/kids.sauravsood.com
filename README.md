@@ -45,6 +45,13 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - **Works offline.** `public/trace/sw.js` (a service worker) keeps the page, code, outlines and icons on the device: network first with a 2.5 s wait, cache otherwise. Add any new file Trace needs to its `FILES` list and bump `VERSION`.
 - **Saves on the device, syncs later.** Drawings go to IndexedDB first (`local.js`), keyed by an id made on the device and by account, so two grown-ups on one iPad stay apart. `sync.js` sends changes (`PUT`/`DELETE /api/drawings/c/<id>`, newest edit wins, safe to repeat) and pulls drawings from other devices (`GET /api/drawings?meta=1`, then `?ids=…`). It runs after each save, every 30 s, when the internet comes back and when the app is reopened. Time spent and name changes wait in `localStorage` and are sent with the day they happened. A cloud-with-a-line icon in the top bar means "offline, saved here". Signing in and out need the internet.
 
+### Kid-proofing (Trace)
+
+- **Leaving mid-drawing** (tab switch, Home swipe, app switch): the line being drawn is kept, a copy goes to localStorage (`trace:draft`) straight away, then the normal IndexedDB save runs. `openDrawing()` uses the copy when it is newer, so a reload of `#e/<id>` lands exactly where the child stopped.
+- **Stuck paper**: if iPadOS swallows a touch (Home bar, Dock, Control Centre) and never sends the lift, the next touch frees the paper (`inputStuck`, `lostpointercapture`, reset on return).
+- **No scrolling, bouncing or zoom** anywhere on the drawing screen; buttons sit clear of the bottom edge.
+- **Grown-up tips** in the profile sheet: Add to Home Screen (full screen, no tabs) and Guided Access.
+
 ### Kids (Trace)
 
 - Tap the child's name in the top bar to see every child in the family as a coloured circle. Tapping a circle switches to that child; **+ Add** asks the grown-up sum (`/shared/grownup.js`) and then a name. Switching and adding need the internet; whatever the current child made is sent first.

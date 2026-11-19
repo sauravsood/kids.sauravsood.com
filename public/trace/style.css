@@ -286,6 +286,12 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 14px;
 }
+/* Kid-proofing while drawing: nothing on this screen scrolls, bounces or
+   zooms (taps still work), and the buttons sit well clear of the bottom edge,
+   where a swipe pulls up the Home bar or the Dock. */
+#draw, #draw * { touch-action: none; }
+#draw { overscroll-behavior: none; padding-bottom: max(28px, calc(env(safe-area-inset-bottom) + 18px)); }
+html:has(#draw:not([hidden])), html:has(#draw:not([hidden])) body { overflow: hidden; }
 
 .stage-wrap { min-height: 0; min-width: 0; overflow: hidden; display: grid; place-items: center; }
 
@@ -789,3 +795,12 @@ button, a { font: inherit; color: inherit; touch-action: manipulation; }
 .story.reading .story-play .i-pause { display: block; }
 .story.reading .story-play { animation: breathe-btn 2.4s ease-in-out infinite alternate; }
 @keyframes breathe-btn { to { box-shadow: 0 0 0 10px rgba(31, 179, 107, 0.18); } }
+
+/* Grown-up tips in the profile sheet */
+.tips { max-width: 420px; width: 100%; color: var(--muted); font-size: 15px; line-height: 1.4; }
+.tips summary { cursor: pointer; text-align: center; font-weight: 600; list-style: none; padding: 6px; }
+.tips summary::-webkit-details-marker { display: none; }
+.tips summary::after { content: " \25BE"; }
+.tips[open] summary::after { content: " \25B4"; }
+.tips p { margin: 8px 0 0; }
+.tips b { color: var(--ink); }
