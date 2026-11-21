@@ -229,3 +229,7 @@ export function stopMusic(secs = 0.6) {
 // For tests and the voice: the shared context, if any.
 export const audioContext = () => ctx;
 export const TUNE_IDS = Object.keys(TUNES);
+
+// For server/sing.py (through scripts/voice/songs.mjs): a tune's notes as
+// [{ notes: [midi], len, chord? }] plus seconds per step.
+export const tuneScore = (id) => (TUNES[id] ? { step: TUNES[id].step, steps: score(TUNES[id]) } : null);

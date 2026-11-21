@@ -4,6 +4,8 @@ import { AuthError, OfflineError, api, pullDrawings, pullMine, pushDrawings, pus
 import { allDrawings, allMine, countDrawings, deleteDrawingRecord, deleteMineRecord, getDrawing, getMine, keepStorage, newAnimalId, newId, putDrawing, putMine } from "./local.js";
 import { NoAnimalError, photoToOutline, prepareModel } from "./photo.js";
 import { closeStory, openStory } from "./story.js";
+import { liveLine, serverMasks } from "./ai.js";
+import { audio } from "./music.js";
 import { appleButton, appleSignInFailed } from "/shared/apple.js";
 
 // Drawing happens in a 1000 x 1000 space that matches the animal outlines,
@@ -1052,7 +1054,9 @@ function guideImage(animal) {
 // The button before Animate now shows the animal's name; tapping it says
 // the name in the same recorded voice as the storybooks
 // (voice/names/<id>.mp3, made by scripts/voice/build.py), or the device's
-// own voice if the recording can't be loaded.
+// own voice if the recording can't be loaded. A My Animal is "Maya’s
+// animal", spoken live in the same voice by the AI server (ai.js), with the
+// "My animal" recording when the server can't be reached.
 let nameClip = null;
 
 function sayName() {
@@ -1063,8 +1067,29 @@ function sayName() {
   try { window.speechSynthesis?.cancel(); } catch { /* none */ }
   const done = () => btn.classList.remove("saying");
   btn.classList.add("saying");
-  const clip = new Audio(`voice/names/${animal.mine ? "mine" : animal.id}.mp3`);
+  const recorded = `voice/names/${animal.mine ? "mine" : animal.id}.mp3`;
+  const kid = state.me?.kidName;
+  const clip = new Audio();
   nameClip = clip;
+  const c = animal.mine && kid ? audio() : null; // unlocked here, inside the tap
+  if (c) {
+    // The live line arrives after the tap, so it plays through Web Audio,
+    // which iPads allow once the context was started by a tap.
+    const decode = (bytes) => new Promise((ok, no) => c.decodeAudioData(bytes, ok, no));
+    liveLine(`${kid}’s animal.`)
+      .catch(() => fetch(recorded).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }))
+      .then(decode)
+      .then((buf) => {
+        if (nameClip !== clip) return;
+        const src = c.createBufferSource();
+        src.buffer = buf;
+        src.connect(c.destination);
+        src.onended = done;
+        src.start();
+        clip.pause = () => { try { src.stop(); } catch { /* done */ } };
+      })
+      .catch(() => fallback());
+  } else clip.src = recorded;
   clip.onended = done;
   const fallback = () => {
     if (nameClip !== clip) return;
@@ -1078,7 +1103,7 @@ function sayName() {
     synth.speak(u);
   };
   clip.onerror = fallback;
-  clip.play().catch(fallback);
+  if (clip.src) clip.play().catch(fallback);
 }
 
 $("say-name").addEventListener("click", sayName);

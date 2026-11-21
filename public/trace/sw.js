@@ -13,16 +13,23 @@
 //
 // The storybook narration (voice/*.mp3) is kept the same way, in its own
 // cache, as each page is first read aloud. Change VOICE when it's re-recorded.
+// Songs (song/*.mp3) likewise, in SONGS, as each is first sung; song/index.json
+// comes network first like the code. Lines spoken live by the AI server
+// ("Maya’s animal…") are kept by ai.js itself in SAY.
 
-const VERSION = "trace-v9";
+const VERSION = "trace-v10";
 const MODELS = "trace-models-v1";
 const VOICE = "trace-voice-v1";
+const SONGS = "trace-songs-v1";
+const SAY = "trace-say-v1";
+const KEEP = [MODELS, VOICE, SONGS, SAY];
 const FILES = [
   "./",
   "app.js",
   "sync.js",
   "local.js",
   "photo.js",
+  "ai.js",
   "story.js",
   "music.js",
   "animals.js",
@@ -50,7 +57,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     for (const key of await caches.keys()) {
-      if (key.startsWith("trace-") && key !== VERSION && key !== MODELS && key !== VOICE) await caches.delete(key);
+      if (key.startsWith("trace-") && key !== VERSION && !KEEP.includes(key)) await caches.delete(key);
     }
     await self.clients.claim();
   })());
@@ -74,6 +81,10 @@ self.addEventListener("fetch", (event) => {
   }
   if (url.pathname.startsWith(`${scope}voice/`)) {
     event.respondWith(cacheFirst(request, url.origin + url.pathname, VOICE));
+    return;
+  }
+  if (url.pathname.startsWith(`${scope}song/`) && url.pathname.endsWith(".mp3")) {
+    event.respondWith(cacheFirst(request, url.origin + url.pathname, SONGS));
     return;
   }
   if (url.pathname.startsWith(scope) || url.pathname.startsWith("/shared/")) {
