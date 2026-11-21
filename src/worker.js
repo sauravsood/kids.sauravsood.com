@@ -1,10 +1,12 @@
 // API for the kids site: Google and Apple sign-in and sessions (shared by every app),
 // Trace's saved drawings and usage stats, and one saved JSON document per
 // app for Pocket Money and My Routines. Also the site-wide feedback bubble
-// (src/feedback.js) and saved checklists for sauravsood.com pages (src/lists.js).
+// (src/feedback.js), saved checklists for sauravsood.com pages (src/lists.js), and
+// a pass-through to Trace's AI server on claude-server (src/ai.js).
 // Static files in public/ are served by Cloudflare's asset handler; only
 // /api/* requests reach this Worker (see run_worker_first in wrangler.jsonc).
 
+import { handleAi } from "./ai.js";
 import { FEEDBACK_SCHEMA, handleFeedback } from "./feedback.js";
 import { LISTS_SCHEMA, handleLists } from "./lists.js";
 import { APPLE, GOOGLE, TokenError, emailVerified, verifyIdToken } from "./oidc.js";
@@ -193,6 +195,8 @@ async function route(request, env, url) {
   const user = await currentUser(request, env);
 
   if (path === "/api/me" && method === "GET") return json(await profile(env, user));
+  // Live storybook voice and photo outlines from the AI server (src/ai.js).
+  if (path.startsWith("/api/ai/")) return handleAi(request, env, path.slice(8), readCookie(request, SESSION_COOKIE));
   // Kids in the family: add one (a grown-up action, behind the sum check in
   // the app) or pick which one is using this device.
   if (path === "/api/kids" && method === "POST") {

@@ -1,5 +1,10 @@
-// My Animals: turns a photo of an animal into an outline to trace, all on
-// the device. Nothing about the photo is sent anywhere while this runs.
+// My Animals: turns a photo of an animal into an outline to trace.
+//
+// When the AI server can be reached (online and signed in), a shrunk copy of
+// the photo (1024 px, redrawn on a canvas, so no EXIF) goes to it through
+// /api/ai/outline: Grounded SAM 2 finds every animal and cuts each one out,
+// so close-up faces get their real shape and a herd becomes one outline per
+// animal. The server keeps nothing. Otherwise everything runs on the device:
 //
 // 1. U²-Net (small, "u2netp", Apache-2.0) finds the main thing in the photo
 //    and gives a soft mask. It runs in onnxruntime-web (MIT), single-threaded
@@ -12,8 +17,11 @@
 //    redrawn on a canvas, so the camera's EXIF data (place, time, device)
 //    is left behind.
 //
-// The result uses the same 1000 x 1000 viewBox and shape strings as the
+// Either way the masks go through the same clean-up and tracing below. The
+// result uses the same 1000 x 1000 viewBox and shape strings as the
 // hand-drawn outlines in animals.js.
+
+import { serverMasks } from "./ai.js";
 
 const MODEL_URL = new URL("models/u2netp.onnx", import.meta.url).href;
 const ORT_DIR = new URL("vendor/onnxruntime/", import.meta.url).href;
@@ -21,6 +29,8 @@ const NET = 320;            // the model's input size
 const WORK = 480;           // long side of the image the outline is made from
 const PHOTO = 160;          // tile corner photo, pixels
 const MAX_LINES = 8;        // inside lines kept at most
+const SEND = 1024;          // long side of the copy sent to the AI server
+const MAX_ANIMALS = 6;
 
 export class NoAnimalError extends Error {}
 
@@ -52,16 +62,24 @@ export async function photoToOutline(file) {
   const H = Math.max(8, Math.round(sh * k));
   const rgb = pixels(source, W, H);
 
-  const saliency = await findSubject(source, W, H);
-  const mask = cleanMask(saliency, W, H);
-  if (!mask) throw new NoAnimalError("No animal found");
+  let masks = await animalsFromServer(source, W, H).catch(() => null);
+  if (!masks) {
+    const one = cleanMask(await findSubject(source, W, H), W, H);
+    if (!one) throw new NoAnimalError("No animal found");
+    masks = [one];
+  }
+  // All the animals together, for the framing, inside lines, colour and photo.
+  const mask = { data: new Uint8Array(W * H) };
+  for (const m of masks) for (let i = 0; i < m.data.length; i++) if (m.data[i]) mask.data[i] = 1;
 
   const box = bounds(mask.data, W, H);
   const fit = fitter(box);
   const shapes = [];
-  const outline = traceBorder(mask.data, W, H);
-  if (outline.length < 12) throw new NoAnimalError("No animal found");
-  shapes.push(`<path d="${closedPath(simplify(smooth(outline, 2, true), 0.9, true).map(fit))}"/>`);
+  for (const m of masks) {
+    const outline = traceBorder(m.data, W, H);
+    if (outline.length >= 12) shapes.push(`<path d="${closedPath(simplify(smooth(outline, 2, true), 0.9, true).map(fit))}"/>`);
+  }
+  if (!shapes.length) throw new NoAnimalError("No animal found");
   for (const line of insideLines(rgb, mask.data, W, H, box)) {
     shapes.push(`<path class="line" d="${openPath(line.map(fit))}"/>`);
   }
@@ -105,7 +123,35 @@ function pixels(source, w, h) {
   return ctx.getImageData(0, 0, w, h).data;
 }
 
-// ---------- Finding the animal ----------
+// ---------- Finding the animals on the AI server ----------
+
+// -> [{ data, area }] one cleaned mask per animal at W x H, biggest first, or
+// null when the server can't be reached or found nothing.
+async function animalsFromServer(source, W, H) {
+  const k = Math.min(1, SEND / Math.max(source.width, source.height));
+  const [c, ctx] = canvas2d(Math.round(source.width * k), Math.round(source.height * k));
+  ctx.drawImage(source, 0, 0, c.width, c.height);
+  const jpeg = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.85));
+  if (!jpeg) return null;
+  const result = await serverMasks(jpeg);
+  const claimed = new Uint8Array(W * H);
+  const masks = [];
+  for (const a of (result.animals || []).slice(0, MAX_ANIMALS)) {
+    const img = new Image();
+    img.src = `data:image/png;base64,${a.mask}`;
+    await img.decode();
+    const px = pixels(img, W, H);
+    const sal = new Float32Array(W * H);
+    for (let i = 0, p = 0; p < sal.length; i += 4, p++) sal[p] = !claimed[p] && px[i] > 127 ? 1 : 0;
+    const m = cleanMask(sal, W, H, masks.length ? 0.003 : 0.01);
+    if (!m) continue;
+    for (let i = 0; i < claimed.length; i++) if (m.data[i]) claimed[i] = 1;
+    masks.push(m);
+  }
+  return masks.length ? masks : null;
+}
+
+// ---------- Finding the animal on the device ----------
 
 async function findSubject(source, W, H) {
   const { ort, session } = await prepareModel();
@@ -147,7 +193,7 @@ async function findSubject(source, W, H) {
 }
 
 // Biggest piece, holes filled, edges rounded. Null if there's nothing there.
-function cleanMask(sal, W, H) {
+function cleanMask(sal, W, H, least = 0.01) {
   let m = new Uint8Array(W * H);
   for (let i = 0; i < m.length; i++) m[i] = sal[i] > 0.5 ? 1 : 0;
   m = largestPiece(m, W, H);
@@ -163,7 +209,7 @@ function cleanMask(sal, W, H) {
   let area = 0;
   for (const v of m) area += v;
   const share = area / (W * H);
-  if (share < 0.01 || share > 0.97) return null;
+  if (share < least || share > 0.97) return null;
   return { data: m, area };
 }
 

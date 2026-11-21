@@ -16,7 +16,7 @@ A home page of calm, hands-on things for kids, built for iPad first. Apps are gr
 | Life Skills | Pocket Money | `/money/` | Live |
 | | My Routines | `/routines/` | Live |
 
-Everything is plain HTML, CSS and JavaScript in `public/`, with no build step for this repo. Landing pages share `public/shared/kids.css`.
+Everything is plain HTML, CSS and JavaScript in `public/`, with no build step for this repo. `server/` is Trace's optional AI server (live storybook voice, song maker, photo outlines), which runs on claude-server; see `server/README.md`. Landing pages share `public/shared/kids.css`.
 
 ## Calm by design
 
@@ -61,15 +61,16 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 ### My Animals (Trace)
 
 - A sixth group, **My Animals**, starts empty with a big camera button. On an iPad or phone it opens the camera (`<input type="file" accept="image/*" capture="environment">`); on a computer it opens a file picker.
+- **With the AI server** (online and signed in), a 1024 px copy of the photo, redrawn without EXIF, goes through `/api/ai/outline` to Grounded SAM 2 on claude-server (see `server/README.md`). Each animal comes back as its own mask, so a close-up face keeps its real shape and a herd gives one outline per animal. The server stores nothing. If the server can't be reached, the on-device model below is used.
 - `public/trace/photo.js` turns the photo into an outline **on the device**: U²-Net small (`models/u2netp.onnx`, 4.6 MB, Apache-2.0) finds the animal, the mask is cleaned up and its border becomes the outline, and a light edge finder adds up to 8 long lines inside (legs, wings, ears) as open `class="line"` paths. It runs in onnxruntime-web 1.31.1 (`vendor/onnxruntime/`, MIT), single-threaded WebAssembly, in about 2 seconds. The result uses the same 1000 × 1000 shape strings as `animals.js`.
 - The child sees the outline first, then keeps it (✓) or takes another photo. A kept outline becomes a tile for good, with a small square of the photo in its top-left corner, and opens straight away to trace. The trash on a tile (two taps) hides it; drawings of it still open from History.
-- **Photo privacy:** the full photo never leaves the device and isn't kept. Only a 160 px square around the animal is kept for the tile, redrawn on a canvas as a fresh JPEG, so the camera's EXIF (GPS place, time, device) is dropped.
+- **Photo privacy:** the full photo never leaves the device and isn't kept (only the shrunk, EXIF-free copy goes to the AI server, which doesn't keep it). Only a 160 px square around the animal is kept for the tile, redrawn on a canvas as a fresh JPEG, so the camera's EXIF (GPS place, time, device) is dropped.
 - **Offline:** the model and runtime (about 20 MB) are fetched the first time My Animals is opened online, and the service worker keeps them in their own cache (`trace-models-v1`, cache first). After that the camera works with no internet.
 - **Saving:** like drawings, My Animals are saved in IndexedDB first (database `trace-mine`, kept apart from the drawings database so it never needs an upgrade) and synced by `sync.js`: `PUT /api/mine/<id>` (newest edit wins, removals are `hidden: true`), `GET /api/mine?meta=1` and `?ids=…`. The server keeps them in the D1 table `my_animals`, up to 500 per account, and accepts only plain `<path>` shapes and JPEG photos, because shapes go into the page as SVG. Ids are `my` + 14 letters and double as animal ids in drawings.
 
 ### Say the name (Trace)
 
-- A pink button before **Animate now** shows the animal's name ("Cat", "Triceratops", "My animal"). Tapping it says the name in the same recorded Kokoro voice as the storybooks: `public/trace/voice/names/<animal>.mp3` (`mine.mp3` for a My Animal). These come from `scripts/voice/lines.mjs` like the rhyme lines; re-record just them with `build.py ... names/`. If a recording can't be loaded, the device's own voice says it.
+- A pink button before **Animate now** shows the animal's name ("Cat", "Triceratops", "My animal"). Tapping it says the name in the same recorded Kokoro voice as the storybooks: `public/trace/voice/names/<animal>.mp3` (`mine.mp3` for a My Animal). These come from `scripts/voice/lines.mjs` like the rhyme lines; re-record just them with `build.py ... names/`. For a My Animal, the button says "Maya’s animal", spoken live in the same voice by the AI server (`/api/ai/say`, `public/trace/ai.js`), with `mine.mp3` when the server can't be reached. If a recording can't be loaded, the device's own voice says it.
 
 ### Animate now (Trace)
 
@@ -80,6 +81,8 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - **Page turns** curl over like paper, with shading, using [StPageFlip](https://github.com/Nodlik/StPageFlip) 2.0.7 (MIT, vendored unchanged in `public/trace/vendor/page-flip/`). Children can also swipe or drag a corner. Only the page in view animates, and its move starts over each time it's shown.
 - **Play button** (green): reads the book like an audiobook. A warm recorded voice says the title, then each page, while a soft music box plays the rhyme's own old tune underneath (Twinkle, Baa Baa, Row Your Boat, Old MacDonald) or a gentle lullaby pattern for rhymes that are usually spoken. The music dips while the voice speaks. After each page it waits a moment and turns the page by itself until "The end", then the music fades away. Tap again to pause. There is no sound until it's tapped, and it plays with the silent switch on.
   - The voice is recorded ahead of time with [Kokoro-82M](https://github.com/hexgrad/kokoro) (Apache-2.0, voice `af_heart`): `public/trace/voice/<book>/<page>.mp3` (about 3 MB, 181 lines). Lines that name the child's animal have one recording per animal (`<page>-<animal>.mp3`), and `-mine` says "my animal" for a My Animal. Re-record with `scripts/voice/build.py` (instructions at its top) after changing any rhyme text, then bump `VOICE` in `sw.js`.
+  - **The child's name:** for a My Animal, lines that name it ("Maya’s animal jumped over the moon") are spoken live by the AI server on claude-server with the same Kokoro voice (`server/`, `/api/ai/say`). They're kept on the device afterwards (cache `trace-say-v1`), and the recorded "my animal" line plays when the server can't be reached.
+  - **Singing:** books with a real tune (`SUNG` in `story.js`: Twinkle, Baa Baa, Row Your Boat, Old MacDonald) are sung once their song has been made with ACE-Step 1.5 by `server/sing.py` (`public/trace/song/<book>/<version>.mp3`, page times in `song/index.json`). The title is read, then the song plays through with the pages turning in time. Turning a page by hand jumps the song there. A book without a song is read over the music box.
   - The music is played live by `public/trace/music.js` (Web Audio, no files). Tunes are traditional and public domain.
   - Recordings are saved for offline use the first time each page is read. If one can't be loaded, the device's own voice reads that page instead.
 - Calm: nothing turns or speaks unless the child taps, each page plays one slow move and then the animal just breathes, and every book ends on "The end" with Read again, other books, or close. Reduced-motion settings stop the movement.

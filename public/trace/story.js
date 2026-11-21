@@ -13,6 +13,7 @@
 import { ANIMALS, CATEGORIES } from "./animals.js";
 import { PageFlip } from "./vendor/page-flip/page-flip.module.js";
 import { audio, startMusic, stopMusic, duck } from "./music.js";
+import { liveLine } from "./ai.js";
 
 const W = 1600;
 const H = 1000;
@@ -369,6 +370,10 @@ function sceneSvg(inner) {
 }
 
 // Shows the shelf of books. img = { url } of the child's animal, made by app.js.
+// Books with a real tune: sung (server/sing.py makes public/trace/song/) when
+// the songs are there, read over the music box when they aren't.
+export const SUNG = ["star", "baa", "boat", "macdonald"];
+
 export function openStory(img, animal, kidName, onPage) {
   current = { book: null, page: 0, img, animal, kidName, onPage };
   const dialog = $("story");
@@ -498,28 +503,121 @@ let voiceOut = null; // the recording playing now
 const clips = new Map(); // url -> Promise<AudioBuffer>
 
 // The recordings for page n: voice/<book>/<n>.mp3, or <n>-<animal>.mp3 when
-// the line names the child's animal ("mine" for a My Animal).
+// the line names the child's animal ("mine" for a My Animal). For a My
+// Animal with the child's name ("Maya’s animal"), the line is spoken live by
+// the AI server in the same voice ("live:<text>|<recording>"), and the
+// "my animal" recording is used when the server can't be reached.
 function clipUrls(book, n) {
   if (n >= book.pages.length) return ["voice/end.mp3"];
   const page = book.pages[n];
   const who = current.animal.mine ? "mine" : current.animal.id;
-  const line = `voice/${book.id}/${n}${page.text.length ? `-${who}` : ""}.mp3`;
+  let line = `voice/${book.id}/${n}${page.text.length ? `-${who}` : ""}.mp3`;
+  if (current.animal.mine && current.kidName && page.text.length) line = `live:${pageText(book, n)}|${line}`;
   return n === 0 ? [`voice/${book.id}/title.mp3`, line] : [line];
 }
+
+const fetchBytes = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); });
 
 function loadClip(url) {
   if (!clips.has(url)) {
     const c = audio();
-    const p = fetch(url)
-      .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-      .then((b) => new Promise((resolve, reject) => c.decodeAudioData(b, resolve, reject)));
+    const decode = (b) => new Promise((resolve, reject) => c.decodeAudioData(b, resolve, reject));
+    let p;
+    if (url.startsWith("live:")) {
+      const cut = url.lastIndexOf("|");
+      const recorded = url.slice(cut + 1);
+      p = liveLine(url.slice(5, cut)).then(decode).catch(() => fetchBytes(recorded).then(decode));
+    } else {
+      p = fetchBytes(url).then(decode);
+    }
     p.catch(() => clips.delete(url));
     clips.set(url, p);
   }
   return clips.get(url);
 }
 
+// ---------- Singing ----------
+// Books with a real tune (SUNG) are sung when their song has been made
+// (server/sing.py, ACE-Step 1.5): song/<book>/<version>.mp3, with the time
+// each page starts in song/index.json. The title is still read, then the
+// song plays straight through and the pages turn in time with it. Without a
+// song (not made yet, or offline and not saved) the book is read over the
+// music box as before.
+
+let songIndex = null;
+let song = null; // { key, buf, src, at (context time of song 0 s), times, auto }
+
+function songFor(book) {
+  if (!SUNG.includes(book.id)) return Promise.resolve(null);
+  songIndex ??= fetch("song/index.json").then((r) => (r.ok ? r.json() : {})).catch(() => { songIndex = null; return {}; });
+  return songIndex.then((idx) => {
+    const versions = idx?.[book.id];
+    if (!versions) return null;
+    const v = versions.song ? "song" : (current.animal.mine ? "mine" : current.animal.id);
+    if (!versions[v]) return null;
+    const url = `song/${book.id}/${v}.mp3`;
+    return loadClip(url).then((buf) => ({ key: url, buf, times: versions[v].pages })).catch(() => null);
+  });
+}
+
+function stopSong() {
+  if (song?.src) { try { song.src.stop(); } catch { /* done */ } }
+  song = null;
+}
+
+// Sings from page n (seeking there if the child turned the page by hand).
+function singPage(book, n, token, found) {
+  const c = audio();
+  const { times } = found;
+  if (song && song.key === found.key && song.auto === n && song.src) {
+    // We turned this page ourselves, in time with the song: just wait for the next one.
+    nextTurn(book, n, token);
+    return;
+  }
+  stopSong();
+  stopMusic(0.4);
+  const startSong = (delay) => {
+    if (token !== readToken || !reading) return;
+    const from = n === 0 ? 0 : Math.max(0, times[n] - 0.25); // page one keeps the song's intro
+    const src = c.createBufferSource();
+    src.buffer = found.buf;
+    src.connect(c.destination);
+    const at = c.currentTime + delay;
+    src.start(at, from);
+    song = { ...found, src, at: at - from, auto: -1 };
+    src.onended = () => {
+      if (song?.src !== src || token !== readToken || !reading) return;
+      song = null;
+      if (flipBook) flipBook.flipNext(); // on to "The end"
+    };
+    nextTurn(book, n, token);
+  };
+  if (n === 0) {
+    loadClip(`voice/${book.id}/title.mp3`).then((buf) => {
+      if (token !== readToken || !reading) return;
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.connect(c.destination);
+      src.start(c.currentTime + 0.6);
+      voiceOut = { stop: () => { try { src.stop(); } catch { /* done */ } } };
+      startSong(0.6 + buf.duration + 0.5);
+    }).catch(() => startSong(0.4));
+  } else startSong(0.3);
+}
+
+function nextTurn(book, n, token) {
+  clearTimeout(readTimer);
+  if (!song || n + 1 >= book.pages.length) return; // the last page ends with the song
+  const wait = (song.at + song.times[n + 1] - audio().currentTime) * 1000;
+  readTimer = setTimeout(() => {
+    if (token !== readToken || !reading || !song || !flipBook) return;
+    song.auto = n + 1;
+    flipBook.flipNext();
+  }, Math.max(0, wait - 500)); // the turn takes about a second; land on the words
+}
+
 function hushVoice() {
+  stopSong();
   if (voiceOut) { try { voiceOut.stop(); } catch { /* done */ } voiceOut = null; }
   try { window.speechSynthesis?.cancel(); } catch { /* none */ }
   duck(false);
@@ -553,12 +651,27 @@ function speakWithDevice(text, token, done) {
 }
 
 function readPage() {
-  clearTimeout(readTimer);
-  hushVoice();
-  const token = ++readToken;
   const book = current?.book;
   if (!book) return;
   const n = current.page;
+  if (song && song.auto === n && n < book.pages.length) { singPage(book, n, readToken, song); return; }
+  clearTimeout(readTimer);
+  hushVoice();
+  const token = ++readToken;
+  if (SUNG.includes(book.id) && n < book.pages.length) {
+    audio(); // made here, inside the tap, so iPads allow sound
+    // Read aloud while the song loads only if there's no song to sing.
+    songFor(book).then((found) => {
+      if (token !== readToken || !reading) return;
+      if (found) singPage(book, n, token, found);
+      else speakPage(book, n, token);
+    });
+    return;
+  }
+  speakPage(book, n, token);
+}
+
+function speakPage(book, n, token) {
   const text = pageText(book, n);
   const end = n >= book.pages.length;
   let done = false;

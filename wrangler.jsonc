@@ -42,6 +42,10 @@
     "APPLE_CLIENT_ID": "",
     // Feedback bubble: PRIVATE repo that new feedback is filed in as issues.
     // Only used once the secret FEEDBACK_GITHUB_TOKEN is set on the Worker.
-    "FEEDBACK_GITHUB_REPO": "sauravsood/site-feedback"
+    "FEEDBACK_GITHUB_REPO": "sauravsood/site-feedback",
+    // Trace's AI server (server/ in this repo) on claude-server, through the
+    // Cloudflare tunnel. Live storybook voice and photo outlines; Trace falls
+    // back to recordings and the on-device model when it can't be reached.
+    "AI_URL": "https://ai.sauravsood.com"
   }
 }

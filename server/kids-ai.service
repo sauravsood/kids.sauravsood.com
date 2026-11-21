@@ -1,0 +1,17 @@
+[Unit]
+Description=Trace AI server (voice and photo outlines) for kids.sauravsood.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/kids.sauravsood.com/server
+Environment=HF_HOME=/home/ubuntu/.cache/huggingface
+Environment=OMP_NUM_THREADS=4
+ExecStart=/home/ubuntu/kids.sauravsood.com/server/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=5
+MemoryMax=80%
+
+[Install]
+WantedBy=multi-user.target
