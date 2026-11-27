@@ -51,10 +51,11 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20 L15 5 L19 8 L8 23 Z" transform="translate(0 -2)"/></svg>
         <b id="stat-drawings">0</b>
       </span>
-      <span class="stat" title="Time spent">
+      <!-- Today's time (resets at local midnight). Tap for the day-by-day history. -->
+      <button id="stat-time-btn" class="stat" type="button" title="Time today" aria-label="Time today. Show history.">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9 V13 L15 15 M9 2 H15"/></svg>
         <b id="stat-time">0m</b>
-      </span>
+      </button>
     </div>
     <nav class="tabs" aria-label="Sections">
       <a id="tab-animals" class="tab" href="#">
@@ -187,6 +188,21 @@
         <button id="signout" type="button" class="pill ghost">Sign out</button>
         <button id="profile-cancel" type="button" class="pill ghost">Cancel</button>
         <button type="submit" class="pill">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Time in Trace, day by day and session by session. Read-only. -->
+  <dialog id="time" class="sheet time-sheet" aria-labelledby="time-name">
+    <form method="dialog">
+      <div class="time-head">
+        <span id="time-initial" class="initial" aria-hidden="true"></span>
+        <h2 id="time-name"></h2>
+      </div>
+      <ul id="time-days" class="time-days" aria-label="Time each day"></ul>
+      <p class="note">Counted while Trace is open and in use. Days start at midnight.</p>
+      <div class="sheet-row">
+        <button class="pill">Done</button>
       </div>
     </form>
   </dialog>

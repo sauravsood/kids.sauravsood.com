@@ -8,10 +8,17 @@ import { allDrawings, allMine, deleteDrawingRecord, dirtyDrawings, getDrawing, g
 export class AuthError extends Error {}
 export class OfflineError extends Error {}
 
+// The day on this device, "2026-11-27". Time spent is counted by local day,
+// so "today" starts at midnight here (as Screen Time and Family Link do).
+export function localDay(at = Date.now()) {
+  const d = new Date(at);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 // `kid`: the child (account id) this request is for. Sent as X-Kid so a
 // sync that started before someone switched kids still goes to the right one.
 export async function api(path, { method = "GET", data, kid } = {}) {
-  const headers = {};
+  const headers = { "X-Day": localDay() };
   if (data) headers["Content-Type"] = "application/json";
   if (kid && /^\d+$/.test(kid)) headers["X-Kid"] = kid;
   let res;

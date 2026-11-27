@@ -17,7 +17,7 @@
 // comes network first like the code. Lines spoken live by the AI server
 // ("Maya’s animal…") are kept by ai.js itself in SAY.
 
-const VERSION = "trace-v10";
+const VERSION = "trace-v11";
 const MODELS = "trace-models-v1";
 const VOICE = "trace-voice-v1";
 const SONGS = "trace-songs-v1";

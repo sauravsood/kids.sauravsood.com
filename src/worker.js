@@ -55,6 +55,18 @@ const SCHEMA = [
      day TEXT NOT NULL,
      seconds INTEGER NOT NULL DEFAULT 0,
      PRIMARY KEY (user_id, day))`,
+  // Trace sessions: a stretch of use with no gap longer than a few minutes,
+  // started on the device (client_id) on the child's local day. usage keeps
+  // the day totals; these only say when, within a day, the time was spent.
+  `CREATE TABLE IF NOT EXISTS play_sessions (
+     user_id INTEGER NOT NULL,
+     client_id TEXT NOT NULL,
+     day TEXT NOT NULL,
+     started_at INTEGER NOT NULL,
+     seconds INTEGER NOT NULL DEFAULT 0,
+     updated_at INTEGER NOT NULL,
+     PRIMARY KEY (user_id, client_id))`,
+  `CREATE INDEX IF NOT EXISTS play_sessions_by_day ON play_sessions (user_id, day)`,
   `CREATE TABLE IF NOT EXISTS app_state (
      user_id INTEGER NOT NULL,
      app TEXT NOT NULL,
@@ -178,13 +190,13 @@ async function route(request, env, url) {
     const { credential } = await body(request);
     const claims = await verifyIdToken(credential, GOOGLE, { audience: env.GOOGLE_CLIENT_ID });
     const { user, setCookie } = await signIn(env, claims.sub, claims.email || null, emailVerified(claims));
-    return json(await profile(env, user), 200, { "Set-Cookie": setCookie });
+    return json(await profile(env, user, clientDay(request)), 200, { "Set-Cookie": setCookie });
   }
   if (path === "/api/auth/apple/callback" && method === "POST") return appleCallback(request, env);
   if (path === "/api/auth/dev" && method === "POST" && env.DEV_LOGIN === "1") {
     const { email } = await body(request);
     const { user, setCookie } = await signIn(env, `dev:${email}`, email, true);
-    return json(await profile(env, user), 200, { "Set-Cookie": setCookie });
+    return json(await profile(env, user, clientDay(request)), 200, { "Set-Cookie": setCookie });
   }
   if (path === "/api/auth/logout" && method === "POST") {
     const token = readCookie(request, SESSION_COOKIE);
@@ -193,8 +205,9 @@ async function route(request, env, url) {
   }
 
   const user = await currentUser(request, env);
+  const today = clientDay(request);
 
-  if (path === "/api/me" && method === "GET") return json(await profile(env, user));
+  if (path === "/api/me" && method === "GET") return json(await profile(env, user, today));
   // Live storybook voice and photo outlines from the AI server (src/ai.js).
   if (path.startsWith("/api/ai/")) return handleAi(request, env, path.slice(8), readCookie(request, SESSION_COOKIE));
   // Kids in the family: add one (a grown-up action, behind the sum check in
@@ -206,35 +219,54 @@ async function route(request, env, url) {
     const kid = await env.DB.prepare(
       `INSERT INTO users (google_sub, kid_name, family_id, created_at) VALUES (?, ?, ?, ?) RETURNING id, kid_name`)
       .bind(`kid:${user.parentId}:${randomToken().slice(0, 16)}`, name, user.parentId, Date.now()).first();
-    return json(await profile(env, await pickKid(env, user, kid)), 201);
+    return json(await profile(env, await pickKid(env, user, kid), today), 201);
   }
   if (path === "/api/kids/switch" && method === "POST") {
     const kid = await familyKid(env, user.parentId, (await body(request)).kid);
     if (!kid) throw new HttpError(404, "That kid isn't on this account");
-    return json(await profile(env, await pickKid(env, user, kid)));
+    return json(await profile(env, await pickKid(env, user, kid), today));
   }
 
   if (path === "/api/me" && method === "PUT") {
     const name = kidName((await body(request)).kidName);
     await env.DB.prepare("UPDATE users SET kid_name = ? WHERE id = ?").bind(name, user.id).run();
-    return json(await profile(env, { ...user, kid_name: name }));
+    return json(await profile(env, { ...user, kid_name: name }, today));
   }
 
   if (path === "/api/usage" && method === "POST") {
-    const { seconds, day: sentDay } = await body(request);
+    const { seconds, day: sentDay, session } = await body(request);
     const s = Math.max(0, Math.min(120, Math.round(Number(seconds) || 0)));
     if (s) {
-      // Time spent offline is sent later with the (UTC) day it was spent on.
-      const today = new Date().toISOString().slice(0, 10);
-      const age = (Date.parse(today) - Date.parse(String(sentDay))) / 86400000;
-      const day = /^\d{4}-\d{2}-\d{2}$/.test(String(sentDay)) && age >= 0 && age <= 60 ? sentDay : today;
-      await env.DB.batch([
+      // Time is sent with the child's local day it was spent on (later, if it
+      // was spent offline). Local days can run a day ahead of UTC.
+      const day = validDay(sentDay) || today;
+      const writes = [
         env.DB.prepare("UPDATE users SET seconds = seconds + ? WHERE id = ?").bind(s, user.id),
         env.DB.prepare(`INSERT INTO usage (user_id, day, seconds) VALUES (?, ?, ?)
                         ON CONFLICT (user_id, day) DO UPDATE SET seconds = seconds + excluded.seconds`).bind(user.id, day, s),
-      ]);
+      ];
+      const startedAt = Math.round(Number(session && session.startedAt));
+      if (session && CLIENT_ID_RE.test(String(session.id)) && startedAt > Date.now() - 61 * 86400000 && startedAt < Date.now() + 86400000) {
+        writes.push(env.DB.prepare(
+          `INSERT INTO play_sessions (user_id, client_id, day, started_at, seconds, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT (user_id, client_id) DO UPDATE SET seconds = seconds + excluded.seconds, updated_at = excluded.updated_at`)
+          .bind(user.id, String(session.id), day, startedAt, s, Date.now()));
+      }
+      await env.DB.batch(writes);
     }
-    return json(await stats(env, user.id));
+    return json(await stats(env, user.id, today));
+  }
+
+  // Time spent, for the read-only history: day totals, newest first, and the
+  // sessions within them. Nothing here can be changed from the app.
+  if (path === "/api/usage" && method === "GET") {
+    const since = shiftDay(today, -60);
+    const [days, sessions] = await env.DB.batch([
+      env.DB.prepare("SELECT day, seconds FROM usage WHERE user_id = ? AND day >= ? AND seconds > 0 ORDER BY day DESC").bind(user.id, since),
+      env.DB.prepare(`SELECT client_id AS id, day, started_at AS startedAt, seconds FROM play_sessions
+                      WHERE user_id = ? AND day >= ? ORDER BY started_at DESC LIMIT 2000`).bind(user.id, since),
+    ]);
+    return json({ today, days: days.results, sessions: sessions.results });
   }
 
   // One JSON document per user and app (Pocket Money, My Routines).
@@ -352,11 +384,11 @@ async function route(request, env, url) {
            strokes = excluded.strokes, thumb = excluded.thumb, seconds = excluded.seconds, updated_at = excluded.updated_at
          WHERE excluded.updated_at >= drawings.updated_at`)
         .bind(user.id, clientId, d.animal, d.strokes, d.thumb, d.seconds, createdAt, updatedAt).run();
-      return json({ ok: true, stats: await stats(env, user.id) });
+      return json({ ok: true, stats: await stats(env, user.id, today) });
     }
     if (method === "DELETE") {
       await env.DB.prepare("DELETE FROM drawings WHERE client_id = ? AND user_id = ?").bind(clientId, user.id).run();
-      return json({ ok: true, stats: await stats(env, user.id) });
+      return json({ ok: true, stats: await stats(env, user.id, today) });
     }
   }
   if (path === "/api/drawings" && method === "POST") {
@@ -368,7 +400,7 @@ async function route(request, env, url) {
       .bind(user.id, d.animal, d.strokes, d.thumb, d.seconds, now, now).first();
     await env.DB.prepare("UPDATE drawings SET client_id = 's' || id WHERE id = ?").bind(row.id).run();
     row.client_id = `s${row.id}`;
-    return json({ drawing: publicDrawing(row), stats: await stats(env, user.id) }, 201);
+    return json({ drawing: publicDrawing(row), stats: await stats(env, user.id, today) }, 201);
   }
 
   const match = path.match(/^\/api\/drawings\/(\d+)$/);
@@ -386,11 +418,11 @@ async function route(request, env, url) {
          WHERE id = ? AND user_id = ? RETURNING id, client_id, animal, thumb, seconds, created_at, updated_at`)
         .bind(d.strokes, d.thumb, d.seconds, Date.now(), id, user.id).first();
       if (!row) throw new HttpError(404, "Not found");
-      return json({ drawing: publicDrawing(row), stats: await stats(env, user.id) });
+      return json({ drawing: publicDrawing(row), stats: await stats(env, user.id, today) });
     }
     if (method === "DELETE") {
       await env.DB.prepare("DELETE FROM drawings WHERE id = ? AND user_id = ?").bind(id, user.id).run();
-      return json({ ok: true, stats: await stats(env, user.id) });
+      return json({ ok: true, stats: await stats(env, user.id, today) });
     }
   }
 
@@ -503,12 +535,12 @@ async function pickKid(env, user, kid) {
   return { ...user, id: kid.id, kid_name: kid.kid_name };
 }
 
-async function profile(env, user) {
+async function profile(env, user, today = clientDay()) {
   const parentId = user.parentId ?? user.id;
   const { results } = await env.DB.prepare(
     "SELECT id, kid_name FROM users WHERE id = ?1 OR family_id = ?1 ORDER BY id").bind(parentId).all();
   const kids = results.filter((k) => k.kid_name || k.id === user.id).map((k) => ({ id: k.id, name: k.kid_name || null }));
-  return { account: user.id, kidName: user.kid_name || null, email: user.email || null, kids, stats: await stats(env, user.id) };
+  return { account: user.id, kidName: user.kid_name || null, email: user.email || null, kids, stats: await stats(env, user.id, today) };
 }
 
 function kidName(value) {
@@ -517,13 +549,33 @@ function kidName(value) {
   return name;
 }
 
-async function stats(env, userId) {
+// `today` is the child's local day (see clientDay).
+async function stats(env, userId, today = clientDay()) {
   const row = await env.DB.prepare(
     `SELECT (SELECT COUNT(*) FROM drawings WHERE user_id = ?1) AS drawings,
             (SELECT seconds FROM users WHERE id = ?1) AS seconds,
             (SELECT COALESCE(seconds, 0) FROM usage WHERE user_id = ?1 AND day = ?2) AS today`)
-    .bind(userId, new Date().toISOString().slice(0, 10)).first();
-  return { drawings: row.drawings || 0, seconds: row.seconds || 0, todaySeconds: row.today || 0 };
+    .bind(userId, today).first();
+  return { drawings: row.drawings || 0, seconds: row.seconds || 0, todaySeconds: row.today || 0, day: today };
+}
+
+// The day on the child's device ("2026-11-27"), sent by Trace as X-Day so
+// "today" turns over at local midnight, like Screen Time. Falls back to UTC.
+function clientDay(request) {
+  return validDay(request && request.headers.get("X-Day"), 1) || new Date().toISOString().slice(0, 10);
+}
+
+// A YYYY-MM-DD day from the last 60 days, or up to `ahead` days in the future
+// (local days run ahead of UTC east of Greenwich). Otherwise null.
+function validDay(value, ahead = 1) {
+  const day = String(value || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const age = (Date.parse(new Date().toISOString().slice(0, 10)) - Date.parse(day)) / 86400000;
+  return age >= -ahead && age <= 60 ? day : null;
+}
+
+function shiftDay(day, n) {
+  return new Date(Date.parse(day) + n * 86400000).toISOString().slice(0, 10);
 }
 
 // ---------- Helpers ----------

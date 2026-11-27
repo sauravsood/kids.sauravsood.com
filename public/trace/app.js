@@ -1,6 +1,6 @@
 import { getStroke } from "./vendor/perfect-freehand/perfect-freehand.mjs";
 import { ANIMALS, CATEGORIES, animalSvg } from "./animals.js";
-import { AuthError, OfflineError, api, pullDrawings, pullMine, pushDrawings, pushMine, validMine } from "./sync.js";
+import { AuthError, OfflineError, api, localDay, pullDrawings, pullMine, pushDrawings, pushMine, validMine } from "./sync.js";
 import { allDrawings, allMine, countDrawings, deleteDrawingRecord, deleteMineRecord, getDrawing, getMine, keepStorage, newAnimalId, newId, putDrawing, putMine } from "./local.js";
 import { NoAnimalError, photoToOutline, prepareModel } from "./photo.js";
 import { closeStory, openStory } from "./story.js";
@@ -18,6 +18,7 @@ const COLORS = [
 ];
 const SIZES = [14, 28, 56];
 const IDLE_MS = 3 * 60_000;      // stop counting time after 3 minutes without a touch
+const SESSION_GAP_MS = 5 * 60_000; // away (hidden or idle) this long, and the next minute starts a new session
 const SYNC_EVERY_MS = 30_000;    // send time spent and unsent drawings this often
 const PULL_EVERY_MS = 5 * 60_000; // check for drawings from other devices this often
 const SAVE_DELAY_MS = 1200;      // save a drawing this long after the last change
@@ -71,7 +72,8 @@ const state = {
   lastInputAt: 0,       // when the line being drawn last moved
   penSeenAt: -Infinity, // no Pencil yet, so fingers draw straight away
   lastActivity: Date.now(),
-  usage: {},            // seconds not sent yet, by UTC day: { "2026-11-15": 95 }
+  usage: {},            // seconds not sent yet, by session: { <id>: { day, startedAt, seconds } }
+  session: null,        // the session being counted: { id, day, startedAt, lastTick }
   localCount: null,     // drawings on this device for this account
   offline: false,
   mine: new Map(),      // My Animals for this account, by animal id
@@ -151,12 +153,24 @@ async function boot() {
 
 // The account's id, used to keep each account's drawings apart on the device.
 const owner = () => state.me && String(state.me.account ?? state.me.email);
-const utcDay = () => new Date().toISOString().slice(0, 10);
+
+// Time waiting to be sent, by session. Older versions kept { day: seconds };
+// those still count for their day, just without a session.
+function loadUsage(who) {
+  const saved = store.get(`trace:usage:${who}`, {});
+  const usage = {};
+  for (const [key, value] of Object.entries(saved)) {
+    if (typeof value === "number") { if (value > 0) usage[`d${key.replace(/-/g, "")}`] = { day: key, seconds: value }; }
+    else if (value && value.seconds > 0) usage[key] = value;
+  }
+  return usage;
+}
 
 async function enterAccount() {
   store.set("trace:me", state.me);
   await loadMine();
-  state.usage = store.get(`trace:usage:${owner()}`, {});
+  state.usage = loadUsage(owner());
+  state.session = store.get(`trace:session:${owner()}`, null);
   const pendingName = store.get(`trace:name:${owner()}`, null);
   if (pendingName) state.me.kidName = pendingName;
   await refreshCount();
@@ -242,13 +256,16 @@ function renderTopbar() {
   // Until this device has fetched the account's drawings once, the server's count is the right one.
   const pulled = store.get(`trace:pulled:${owner()}`, false);
   $("stat-drawings").textContent = pulled && state.localCount !== null ? state.localCount : state.me.stats.drawings;
-  $("stat-time").textContent = formatTime(state.me.stats.seconds + pendingSeconds());
+  $("stat-time").textContent = formatTime(todaySeconds());
+  // The history sheet's today line keeps counting while it's open.
+  const todayTotal = $("time").open && $("time-days").querySelector(`[data-day="${localDay()}"] .time-total`);
+  if (todayTotal) todayTotal.textContent = formatTime(todaySeconds());
 }
 
 $("who").addEventListener("click", () => {
   renderKids();
   $("profile-name").value = state.me.kidName || "";
-  $("profile-today").textContent = `Today: ${formatTime(state.me.stats.todaySeconds + (state.usage[utcDay()] || 0))}`;
+  $("profile-today").textContent = `Today: ${formatTime(todaySeconds())}`;
   $("profile-email").textContent = state.me.email ? `Signed in as ${state.me.email}` : "";
   // Already opened from the Home Screen icon: no need for the install tip.
   $("tip-install").hidden = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
@@ -381,6 +398,7 @@ $("signout").addEventListener("click", async () => {
       if (!record.dirty) await deleteMineRecord(record.cid);
     }
     store.set(`trace:pulled:${kid}`, false);
+    store.set(`trace:timehist:${kid}`, null);
   }
   state.mine = new Map();
   store.set("trace:me", null);
@@ -480,31 +498,154 @@ for (const type of ["pointerdown", "keydown"]) {
 setInterval(() => {
   if (!state.me || !state.me.kidName || document.visibilityState !== "visible") return;
   if (Date.now() - state.lastActivity > IDLE_MS) return;
-  const day = utcDay();
-  state.usage[day] = (state.usage[day] || 0) + 1;
+  const now = Date.now();
+  const day = localDay(now);
+  let session = state.session;
+  // Like Screen Time: a new day starts at midnight, and coming back after a
+  // few minutes away starts a new session.
+  if (!session || session.day !== day || now - session.lastTick > SESSION_GAP_MS) {
+    session = state.session = { id: `s${now.toString(36)}${Math.random().toString(36).slice(2, 8)}`, day, startedAt: now, lastTick: now };
+  }
+  session.lastTick = now;
+  const pending = state.usage[session.id] ||= { day, startedAt: session.startedAt, seconds: 0 };
+  pending.seconds += 1;
   store.set(`trace:usage:${owner()}`, state.usage);
+  store.set(`trace:session:${owner()}`, session);
   if (!draw.hidden && state.animal && !state.readOnly) state.drawingSeconds += 1;
   renderTopbar();
 }, 1000);
 
-function pendingSeconds() {
-  return Object.values(state.usage).reduce((a, b) => a + b, 0);
+// Today's time for this child: what the server has for today (on this
+// device's calendar) plus what hasn't been sent yet.
+function todaySeconds() {
+  const today = localDay();
+  const { stats } = state.me;
+  const sent = !stats.day || stats.day === today ? stats.todaySeconds || 0 : 0;
+  return sent + Object.values(state.usage).reduce((a, p) => a + (p.day === today ? p.seconds : 0), 0);
 }
 
-// Sends time spent, in chunks the server accepts, with the day it was spent on.
+// Sends time spent, in chunks the server accepts, with its day and session.
 async function flushUsage(who) {
-  for (const day of Object.keys(state.usage)) {
-    while (owner() === who && (state.usage[day] || 0) > 0) {
-      const seconds = Math.min(120, state.usage[day]);
-      const stats = await api("/api/usage", { method: "POST", data: { seconds, day }, kid: who });
+  for (const id of Object.keys(state.usage)) {
+    while (owner() === who && state.usage[id] && state.usage[id].seconds > 0) {
+      const pending = state.usage[id];
+      const seconds = Math.min(120, pending.seconds);
+      const data = { seconds, day: pending.day };
+      if (pending.startedAt) data.session = { id, startedAt: pending.startedAt };
+      const stats = await api("/api/usage", { method: "POST", data, kid: who });
       if (owner() !== who) return;
-      state.usage[day] -= seconds;
-      if (state.usage[day] <= 0) delete state.usage[day];
+      pending.seconds -= seconds;
+      if (pending.seconds <= 0 && state.usage[id] === pending) delete state.usage[id];
       store.set(`trace:usage:${who}`, state.usage);
       state.me.stats = stats;
     }
   }
   renderTopbar();
+}
+
+// ---------- Time history (read-only) ----------
+
+// Tapping today's time shows every day's total, newest first, and the
+// sessions within each day. There is nothing to edit or delete here.
+let timeHistory = null; // { days: [{ day, seconds }], sessions: [{ id, day, startedAt, seconds }] }
+
+$("stat-time-btn").addEventListener("click", async () => {
+  const who = owner();
+  timeHistory = store.get(`trace:timehist:${who}`, null);
+  renderTimeSheet();
+  $("time").showModal();
+  $("time-days").scrollTop = 0;
+  try {
+    const got = await api("/api/usage", { kid: who });
+    if (owner() !== who) return;
+    timeHistory = { days: got.days || [], sessions: got.sessions || [] };
+    store.set(`trace:timehist:${who}`, timeHistory);
+    if ($("time").open) renderTimeSheet();
+  } catch (err) {
+    if (err instanceof AuthError) { $("time").close(); showSignin(); }
+    // Offline: what this device last saw, plus what it counted since.
+  }
+});
+$("time").addEventListener("click", (e) => { if (e.target === $("time")) $("time").close(); });
+
+// Server history plus the time on this device that hasn't been sent yet.
+function mergedTime() {
+  const days = new Map();
+  const sessions = new Map();
+  for (const d of timeHistory?.days || []) days.set(d.day, d.seconds);
+  for (const s of timeHistory?.sessions || []) sessions.set(s.id, { ...s });
+  for (const [id, p] of Object.entries(state.usage)) {
+    days.set(p.day, (days.get(p.day) || 0) + p.seconds);
+    if (!p.startedAt) continue;
+    const s = sessions.get(id);
+    if (s) s.seconds += p.seconds;
+    else sessions.set(id, { id, day: p.day, startedAt: p.startedAt, seconds: p.seconds });
+  }
+  const today = localDay();
+  if (!days.has(today)) days.set(today, 0);
+  // The server's total for today is the freshest one when this device hasn't fetched lately.
+  const { stats } = state.me;
+  if (stats.day === today) days.set(today, Math.max(days.get(today), todaySeconds()));
+  const byDay = new Map();
+  for (const s of sessions.values()) {
+    if (!byDay.has(s.day)) byDay.set(s.day, []);
+    byDay.get(s.day).push(s);
+  }
+  return [...days.entries()]
+    .filter(([day, seconds]) => seconds > 0 || day === today)
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .map(([day, seconds]) => ({ day, seconds, sessions: (byDay.get(day) || []).sort((a, b) => b.startedAt - a.startedAt) }));
+}
+
+function timeDayLabel(day) {
+  const today = localDay();
+  if (day === today) return "Today";
+  if (day === localDay(new Date().setHours(0, 0, 0, 0) - 1)) return "Yesterday";
+  const [y, m, d] = day.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short", ...(y !== new Date().getFullYear() ? { year: "numeric" } : {}) });
+}
+
+function renderTimeSheet() {
+  const name = state.me.kidName || "";
+  $("time-initial").textContent = name.slice(0, 1).toUpperCase();
+  $("time-initial").style.background = kidColor(state.me.account);
+  $("time-name").textContent = name;
+  const days = mergedTime();
+  const most = Math.max(60, ...days.map((d) => d.seconds));
+  const list = $("time-days");
+  // Keep open days open when the list refreshes.
+  const open = new Set([...list.querySelectorAll("details[open]")].map((d) => d.dataset.day));
+  const first = !list.childElementCount;
+  list.replaceChildren(...days.map((d, i) => {
+    const li = document.createElement("li");
+    const box = document.createElement(d.sessions.length ? "details" : "div");
+    box.className = "time-day";
+    box.dataset.day = d.day;
+    if (d.sessions.length && (open.has(d.day) || (first && i === 0))) box.open = true;
+    const head = document.createElement(d.sessions.length ? "summary" : "div");
+    head.className = "time-row";
+    head.innerHTML = `<span class="time-label"></span><span class="time-bar"><i></i></span><b class="time-total"></b>`;
+    head.querySelector(".time-label").textContent = timeDayLabel(d.day);
+    head.querySelector(".time-bar i").style.width = `${Math.max(d.seconds ? 3 : 0, Math.round((d.seconds / most) * 100))}%`;
+    head.querySelector(".time-total").textContent = formatTime(d.seconds);
+    box.appendChild(head);
+    if (d.sessions.length) {
+      const ul = document.createElement("ul");
+      ul.className = "time-sessions";
+      for (const s of d.sessions) {
+        const row = document.createElement("li");
+        const at = new Date(s.startedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+        row.innerHTML = `<span></span><b></b>`;
+        row.firstChild.textContent = at;
+        row.lastChild.textContent = formatTime(s.seconds);
+        ul.appendChild(row);
+      }
+      box.appendChild(ul);
+    }
+    li.appendChild(box);
+    return li;
+  }));
 }
 
 document.addEventListener("visibilitychange", () => {
