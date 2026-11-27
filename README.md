@@ -38,12 +38,18 @@ Apps built by someone else live in `public/<slug>/app/`, next to their landing p
 - Single page that routes by `#hash`: `#history`, `#c/<group>`, `#d/<id>`, `#e/<id>`, `#<animalId>`.
 - Pencil pressure comes through Pointer Events. Strokes are shaped by [perfect-freehand](https://github.com/steveruizok/perfect-freehand) (MIT, vendored in `public/trace/vendor/perfect-freehand/`).
 - Palm rejection: once the Pencil has been used, finger and palm touches are ignored for a minute.
-- Grown-ups sign in with Google; the kid's name, drawing count and time spent stay in the top bar. Every drawing is saved to the account with a timestamp and can be reopened from History.
+- Grown-ups sign in with Google; the kid's name, drawing count and **time today** stay in the top bar. Every drawing is saved to the account with a timestamp and can be reopened from History.
 - Animal outlines are original drawings in `public/trace/animals.js` (1000 × 1000 viewBox).
 - Add it to the iPad home screen for full-screen use. The manifest's `start_url` and `scope` are `/trace/`, so anyone who added Trace before it moved needs to add it again.
 - Old links from when Trace lived at `/` (for example `/#history` or `/#d/12`) are sent on to `/trace/#…` by a small script at the top of the hub page, because hashes never reach the server.
 - **Works offline.** `public/trace/sw.js` (a service worker) keeps the page, code, outlines and icons on the device: network first with a 2.5 s wait, cache otherwise. Add any new file Trace needs to its `FILES` list and bump `VERSION`.
 - **Saves on the device, syncs later.** Drawings go to IndexedDB first (`local.js`), keyed by an id made on the device and by account, so two grown-ups on one iPad stay apart. `sync.js` sends changes (`PUT`/`DELETE /api/drawings/c/<id>`, newest edit wins, safe to repeat) and pulls drawings from other devices (`GET /api/drawings?meta=1`, then `?ids=…`). It runs after each save, every 30 s, when the internet comes back and when the app is reopened. Time spent and name changes wait in `localStorage` and are sent with the day they happened. A cloud-with-a-line icon in the top bar means "offline, saved here". Signing in and out need the internet.
+
+### Time spent (Trace)
+
+- The top bar shows the current child's time **today**, like Apple Screen Time and Google Family Link: it starts again at the device's local midnight. Time only counts while Trace is visible and touched in the last 3 minutes.
+- Tapping it opens a **read-only history**: one row per day for the last 60 days, newest first, and inside each day its sessions (start time and length). A session ends when Trace has been hidden or idle for 5 minutes, and at midnight. There is no way to edit or delete time.
+- Every request sends `X-Day` (the device's local day), so the server's `stats.todaySeconds` matches. Time waits in `localStorage` (`trace:usage:<kid>`, by session) and goes up as `POST /api/usage` `{ seconds, day, session: { id, startedAt } }`, which adds to the `usage` day total and the `play_sessions` row. `GET /api/usage` returns `{ days, sessions }`. Days from before sessions existed show a total only (and were counted by UTC day).
 
 ### Kid-proofing (Trace)
 
